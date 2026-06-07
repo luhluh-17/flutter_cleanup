@@ -8,9 +8,10 @@ import '../models/output_format.dart';
 /// `unused-assets`, and future `unused-files` / `graph` / `doctor`) so each
 /// command body stays focused on its own behavior.
 ///
-/// To enable JSON output on a command later, add the flag in that command's
-/// constructor (`argParser.addFlag('json', negatable: false)`) and override
-/// [outputFormat] to read it — no other layer needs to change.
+/// The shared `--json` flag is defined here once, so every subcommand inherits
+/// machine-readable output without redefining the flag. Commands pass
+/// [outputFormat] through to the [ReportPrinter]; no other layer needs to know
+/// about the flag.
 abstract class FlutterCleanupCommand extends Command<int> {
   FlutterCleanupCommand() {
     argParser.addOption(
@@ -19,14 +20,18 @@ abstract class FlutterCleanupCommand extends Command<int> {
       help: 'Path to the Flutter project.',
       defaultsTo: '.',
     );
+    argParser.addFlag(
+      'json',
+      negatable: false,
+      help: 'Emit machine-readable JSON instead of human-readable text.',
+    );
   }
 
   /// The project path supplied via `--path`, defaulting to the current dir.
   String get path => argResults?['path'] as String? ?? '.';
 
-  /// The format results should be rendered in.
-  ///
-  /// Defaults to [OutputFormat.text]. Commands that add a `--json` flag
-  /// override this to return [OutputFormat.json] when the flag is set.
-  OutputFormat get outputFormat => OutputFormat.text;
+  /// The format results should be rendered in, selected by the `--json` flag.
+  OutputFormat get outputFormat => (argResults?['json'] as bool? ?? false)
+      ? OutputFormat.json
+      : OutputFormat.text;
 }

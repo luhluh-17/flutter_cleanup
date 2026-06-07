@@ -50,6 +50,10 @@ dart run flutter_cleanup duplicate-widgets --path ../my_app
 dart run flutter_cleanup all
 dart run flutter_cleanup all --path ../my_app
 
+# Emit machine-readable JSON instead of text (works on every analyzer + `all`)
+dart run flutter_cleanup duplicate-widgets --json
+dart run flutter_cleanup all --json --path ../my_app
+
 # Print the version
 dart run flutter_cleanup version
 
@@ -294,6 +298,96 @@ Like the individual commands, it exits non-zero only when validation fails
 code. When `lib/main.dart` is absent, the `unused-files` section is skipped (its
 reachability root is undefined) while the other analyzers still run.
 
+## JSON output (`--json`)
+
+Every analyzer command — and `all` — accepts `--json`, which replaces the
+human-readable text report with a single, pretty-printed JSON document on
+stdout. JSON mode emits **no banners, ANSI colors, or decorative separators**,
+so the output can be piped straight into a parser. This is the machine-readable
+contract that integrations (CI/CD, the VS Code extension, dashboards, and other
+automation) build on.
+
+Exit semantics are unchanged: a successful analysis exits `0` regardless of how
+many findings it produced, and a validation failure exits `1`. Consumers should
+therefore inspect the JSON (not the exit code) to count findings; a non-zero
+exit means a validation or usage error, with the reason in the `error` object.
+
+Every document carries a top-level `"schemaVersion"` so consumers can evolve
+safely as fields are added later.
+
+### Single-analyzer schema
+
+`unused-assets`, `unused-files`, `duplicate-code`, and `duplicate-widgets` each
+emit one analyzer document:
+
+```json
+{
+  "schemaVersion": 1,
+  "analyzer": "duplicate-widgets",
+  "findings": [
+    {
+      "rule": "duplicate_widget",
+      "path": "lib/widgets/login_card.dart",
+      "severity": "info",
+      "message": "Widget \"LoginCard\" is highly similar to \"RegisterCard\" in lib/widgets/register_card.dart (96% similarity, 24 nodes)."
+    }
+  ]
+}
+```
+
+Each finding has a stable shape:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `rule` | string | Analyzer-specific rule id (e.g. `duplicate_widget`). |
+| `path` | string | Project-relative path, forward-slashed. |
+| `severity` | string | One of `info`, `warning`, `error`. |
+| `message` | string | Human-readable description. |
+
+A run with no findings emits `"findings": []`. When `lib/main.dart` is absent,
+`unused-files` still emits a well-formed empty result rather than special output,
+so consumers need no analyzer-specific handling.
+
+### Aggregate schema (`all`)
+
+`all --json` emits one document wrapping each analyzer's result in order. The
+nested results use the same shape as above but omit their own `schemaVersion`
+(it is a document-level field):
+
+```json
+{
+  "schemaVersion": 1,
+  "results": [
+    { "analyzer": "unused-assets", "findings": [] },
+    { "analyzer": "unused-files", "findings": [] },
+    { "analyzer": "duplicate-code", "findings": [] },
+    { "analyzer": "duplicate-widgets", "findings": [] }
+  ]
+}
+```
+
+### Validation failure
+
+When the target is not a valid Flutter/Dart project, `--json` emits a structured
+error (and exits `1`) instead of empty output:
+
+```json
+{
+  "schemaVersion": 1,
+  "error": {
+    "message": "pubspec.yaml not found"
+  }
+}
+```
+
+### Intended consumers
+
+- **CI/CD** — gate a build on findings by parsing the JSON (e.g. fail when any
+  analyzer's `findings` is non-empty), independent of the process exit code.
+- **VS Code extension** — surface findings inline by reading each finding's
+  `path`, `severity`, and `message`.
+- **Dashboards / automation** — aggregate `all --json` across projects over time.
+
 ## Architecture
 
 The CLI is built on `package:args` `CommandRunner` with a layered structure
@@ -312,9 +406,10 @@ lib/src/
 
 Project-scoped commands extend `FlutterCleanupCommand`
 ([base_command.dart](lib/src/commands/base_command.dart)), which supplies the
-shared `--path` option and an `outputFormat` hook. Output goes through
-`ReportPrinter`, which is format-aware (`text` today, `json` reserved) so a
-`--json` flag can be added later without reworking the output layer.
+shared `--path` option and the `--json` flag (exposed as an `outputFormat` hook).
+Output goes through `ReportPrinter`, which is format-aware (`text` and `json`),
+so commands pass their `OutputFormat` through without knowing how either format
+is rendered. See [JSON output](#json-output---json).
 
 ### Command roadmap
 

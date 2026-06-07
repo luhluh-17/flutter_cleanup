@@ -1,10 +1,12 @@
 import 'dart:io';
 
+import '../analysis/analysis_result.dart';
 import '../analysis/analyzer.dart';
 import '../analyzers/duplicate_code_analyzer.dart';
 import '../analyzers/duplicate_widgets_analyzer.dart';
 import '../analyzers/unused_assets_analyzer.dart';
 import '../analyzers/unused_files_analyzer.dart';
+import '../models/output_format.dart';
 import '../models/project_paths.dart';
 import '../services/logger.dart';
 import '../services/project_validator.dart';
@@ -52,12 +54,14 @@ class AllCommand extends FlutterCleanupCommand {
   @override
   Future<int> run() async {
     final paths = ProjectPaths(path);
+    final printer = ReportPrinter(_logger, format: outputFormat);
 
-    _logger.info('Analyzing project at ${paths.root}');
-    _logger.blank();
+    if (outputFormat == OutputFormat.text) {
+      _logger.info('Analyzing project at ${paths.root}');
+      _logger.blank();
+    }
 
     final report = _validator.validate(paths);
-    final printer = ReportPrinter(_logger, format: outputFormat);
     printer.validationReport(report);
 
     if (report.hasErrors) {
@@ -84,11 +88,27 @@ class AllCommand extends FlutterCleanupCommand {
     ];
 
     final hasMain = File(paths.mainEntrypoint).existsSync();
+
+    // Reachability is undefined without an entry point, so the unused-files
+    // section is skipped when lib/main.dart is missing. In JSON mode it becomes
+    // an empty result; in text mode it becomes an explanatory heading.
+
+    if (outputFormat == OutputFormat.json) {
+      final results = <AnalysisResult>[];
+      for (final section in sections) {
+        if (identical(section.analyzer, _unusedFiles) && !hasMain) {
+          results.add(AnalysisResult.empty(_unusedFiles.name));
+          continue;
+        }
+        results.add(await section.analyzer.analyze(paths));
+      }
+      printer.aggregate(results);
+      return 0;
+    }
+
     for (final section in sections) {
       _logger.blank();
 
-      // Mirror UnusedFilesCommand: reachability is undefined without an entry
-      // point, so skip that section rather than report every file as unused.
       if (identical(section.analyzer, _unusedFiles) && !hasMain) {
         _logger.heading(section.title);
         _logger.info(

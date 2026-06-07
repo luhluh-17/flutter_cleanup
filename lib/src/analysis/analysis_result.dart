@@ -20,4 +20,14 @@ class AnalysisResult {
 
   /// Whether the analyzer produced any findings.
   bool get hasFindings => findings.isNotEmpty;
+
+  /// Serializes this result to a JSON-encodable map.
+  ///
+  /// The analyzer name is exposed under the `analyzer` key. Document-level
+  /// metadata such as `schemaVersion` is added by the renderer, not here, so
+  /// results nested in an aggregate document do not repeat it.
+  Map<String, dynamic> toJson() => {
+        'analyzer': analyzerName,
+        'findings': [for (final f in findings) f.toJson()],
+      };
 }

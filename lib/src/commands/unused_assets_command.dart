@@ -1,5 +1,6 @@
 import '../analysis/analyzer.dart';
 import '../analyzers/unused_assets_analyzer.dart';
+import '../models/output_format.dart';
 import '../models/project_paths.dart';
 import '../services/logger.dart';
 import '../services/project_validator.dart';
@@ -33,19 +34,23 @@ class UnusedAssetsCommand extends FlutterCleanupCommand {
   @override
   Future<int> run() async {
     final paths = ProjectPaths(path);
+    final printer = ReportPrinter(_logger, format: outputFormat);
 
-    _logger.info('Analyzing project at ${paths.root}');
-    _logger.blank();
+    if (outputFormat == OutputFormat.text) {
+      _logger.info('Analyzing project at ${paths.root}');
+      _logger.blank();
+    }
 
     final report = _validator.validate(paths);
-    final printer = ReportPrinter(_logger, format: outputFormat);
     printer.validationReport(report);
 
     if (report.hasErrors) {
       return 1;
     }
 
-    _logger.blank();
+    if (outputFormat == OutputFormat.text) {
+      _logger.blank();
+    }
     final result = await _analyzer.analyze(paths);
     printer.findings(result, title: 'Unused assets', itemNoun: 'unused asset');
 

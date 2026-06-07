@@ -22,4 +22,15 @@ class Finding {
     required this.severity,
     required this.message,
   });
+
+  /// Serializes this finding to a JSON-encodable map.
+  ///
+  /// [severity] is emitted as its lowercase enum name (`info`/`warning`/
+  /// `error`) so consumers get a stable, machine-readable value.
+  Map<String, dynamic> toJson() => {
+        'rule': rule,
+        'path': path,
+        'severity': severity.name,
+        'message': message,
+      };
 }

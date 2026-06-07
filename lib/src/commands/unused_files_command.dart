@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import '../analysis/analysis_result.dart';
 import '../analysis/analyzer.dart';
 import '../analyzers/unused_files_analyzer.dart';
+import '../models/output_format.dart';
 import '../models/project_paths.dart';
 import '../services/logger.dart';
 import '../services/project_validator.dart';
@@ -36,21 +38,36 @@ class UnusedFilesCommand extends FlutterCleanupCommand {
   @override
   Future<int> run() async {
     final paths = ProjectPaths(path);
+    final printer = ReportPrinter(_logger, format: outputFormat);
 
-    _logger.info('Analyzing project at ${paths.root}');
-    _logger.blank();
+    if (outputFormat == OutputFormat.text) {
+      _logger.info('Analyzing project at ${paths.root}');
+      _logger.blank();
+    }
 
     final report = _validator.validate(paths);
-    final printer = ReportPrinter(_logger, format: outputFormat);
     printer.validationReport(report);
 
     if (report.hasErrors) {
       return 1;
     }
 
-    _logger.blank();
+    if (outputFormat == OutputFormat.text) {
+      _logger.blank();
+    }
     if (!File(paths.mainEntrypoint).existsSync()) {
-      _logger.info('lib/main.dart not found — skipping reachability analysis.');
+      // Reachability is undefined without an entry point. In text mode say so;
+      // in JSON mode emit an empty result so the contract stays consistent and
+      // consumers need no analyzer-specific special-casing.
+      if (outputFormat == OutputFormat.text) {
+        _logger.info('lib/main.dart not found — skipping reachability analysis.');
+      } else {
+        printer.findings(
+          AnalysisResult.empty(_analyzer.name),
+          title: 'Unused files',
+          itemNoun: 'unused file',
+        );
+      }
       return 0;
     }
 
