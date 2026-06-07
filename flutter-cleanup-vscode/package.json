@@ -1,0 +1,38 @@
+{
+  "name": "flutter-cleanup-vscode",
+  "displayName": "Flutter Cleanup",
+  "description": "Run the flutter_cleanup CLI from VS Code and view its JSON report in an Output Channel.",
+  "version": "0.0.1",
+  "publisher": "flutter-cleanup",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onCommand:flutterCleanup.runAll"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "flutterCleanup.runAll",
+        "title": "Flutter Cleanup: Run All"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "execa": "^5.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.4.0"
+  }
+}
