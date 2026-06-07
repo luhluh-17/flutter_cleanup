@@ -48,6 +48,25 @@ dart run flutter_cleanup --help
 `scan` exits with a non-zero status if the target is not a valid
 Flutter/Dart project (missing `pubspec.yaml` or `lib/`).
 
+### Passing Windows paths
+
+PowerShell accepts back-slashed Windows paths unquoted:
+
+```powershell
+dart run flutter_cleanup scan --path C:\Users\you\my_app
+```
+
+In a **bash-style shell** (Git Bash, WSL), an unquoted `\` is an escape
+character, so `C:\Users\you\my_app` arrives as `C:Usersyoumy_app` with the
+separators stripped. Quote the path or use forward slashes instead:
+
+```bash
+dart run flutter_cleanup scan --path "C:/Users/you/my_app"
+```
+
+If a path is passed in the mangled form, the tool now stops with a clear error
+(rather than silently resolving it against the current directory).
+
 ## Ignoring files (`.flutter_cleanup.yaml`)
 
 To reduce false positives, you can exclude files and directories from analysis.

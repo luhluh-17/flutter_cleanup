@@ -5,6 +5,7 @@ import '../commands/scan_command.dart';
 import '../commands/unused_assets_command.dart';
 import '../commands/unused_files_command.dart';
 import '../commands/version_command.dart';
+import '../models/project_paths.dart';
 import '../services/logger.dart';
 
 /// Builds and runs the flutter_cleanup command-line interface.
@@ -37,6 +38,9 @@ class CliRunner {
     try {
       final result = await _buildRunner().run(args);
       return result ?? 0;
+    } on InvalidProjectPathException catch (e) {
+      _logger.error(e.message);
+      return 66; // EX_NOINPUT — the input path cannot be used.
     } on UsageException catch (e) {
       _logger.error(e.message);
       _logger.blank();
