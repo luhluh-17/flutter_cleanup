@@ -7,6 +7,7 @@ import '../analysis/analyzer.dart';
 import '../analysis/path_utils.dart';
 import '../models/finding.dart';
 import '../models/project_paths.dart';
+import '../services/ignore_service.dart';
 
 /// Detects highly similar (likely copy-pasted) Dart files under `lib/` using
 /// token-based similarity.
@@ -54,12 +55,17 @@ class DuplicateCodeAnalyzer implements Analyzer {
     final libDir = Directory(paths.libDir);
     if (!libDir.existsSync()) return AnalysisResult.empty(name);
 
+    final ignore = IgnoreService.forProject(paths.root);
+
     // 1. Collect every Dart file under lib/ as a forward-slash key. Staying
     //    inside libDir excludes test/, .dart_tool/, and .build/ by construction.
+    //    Ignored files are dropped here, so they never become comparison
+    //    candidates and never produce findings.
     final keys = <String>[
       for (final entity in libDir.listSync(recursive: true))
         if (entity is File && p.extension(entity.path) == '.dart')
-          toPosixRelative(paths.root, entity.path),
+          if (!ignore.isIgnored(toPosixRelative(paths.root, entity.path)))
+            toPosixRelative(paths.root, entity.path),
     ]..sort();
 
     // 2. Build a shingle set per eligible file (those above the token floor).

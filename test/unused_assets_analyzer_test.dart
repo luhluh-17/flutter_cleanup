@@ -42,6 +42,10 @@ void main() {
   void writeDart(String relativePath, String contents) =>
       writeFile('lib/$relativePath', contents);
 
+  /// Writes a `.flutter_cleanup.yaml` in the project root.
+  void writeIgnoreConfig(String contents) =>
+      writeFile('.flutter_cleanup.yaml', contents);
+
   Future<AnalysisResult> run() =>
       const UnusedAssetsAnalyzer().analyze(ProjectPaths(tempDir.path));
 
@@ -201,5 +205,31 @@ void build() => Image.asset(pick('logo.png'));
     final result = await run();
 
     expect(unusedPaths(result), {'assets/images/logo.png'});
+  });
+
+  test('an unused asset under an ignored directory is not flagged', () async {
+    writePubspec(['assets/']);
+    writeIgnoreConfig('ignore:\n  - "assets/legacy/**"\n');
+    writeFile('assets/legacy/old_logo.png', 'x');
+    writeFile('assets/images/orphan.png', 'x');
+    writeDart('main.dart', 'void main() {}');
+
+    // The legacy asset is ignored; only the non-ignored orphan is reported.
+    expect(unusedPaths(await run()), {'assets/images/orphan.png'});
+  });
+
+  test('asset referenced only from an ignored generated file is not flagged',
+      () async {
+    // Judge-only semantics: ignored Dart files remain evidence of usage, so an
+    // asset referenced only from a *.g.dart file must not become a false
+    // positive.
+    writePubspec(['assets/images/']);
+    writeFile('assets/images/logo.png', 'x');
+    writeDart('assets.g.dart',
+        "const String logo = 'assets/images/logo.png';");
+
+    final result = await run();
+
+    expect(result.findings, isEmpty);
   });
 }

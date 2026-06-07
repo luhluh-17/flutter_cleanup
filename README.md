@@ -48,6 +48,83 @@ dart run flutter_cleanup --help
 `scan` exits with a non-zero status if the target is not a valid
 Flutter/Dart project (missing `pubspec.yaml` or `lib/`).
 
+## Ignoring files (`.flutter_cleanup.yaml`)
+
+To reduce false positives, you can exclude files and directories from analysis.
+Create an optional `.flutter_cleanup.yaml` in the **project root**:
+
+```yaml
+ignore:
+  - "**/*.g.dart"
+  - "**/*.freezed.dart"
+  - "lib/generated/**"
+  - "assets/legacy/**"
+```
+
+The same ignore rules apply across `unused-assets`, `unused-files`, and
+`duplicate-code`. Ignored paths are never reported, never enter the
+import/export graph, and never participate in duplicate comparisons.
+
+> One deliberate exception: for `unused-assets`, ignored Dart files are still
+> *read* when looking for asset references. A generated file such as
+> `lib/assets.g.dart` that contains `'assets/logo.png'` still counts as a use,
+> so the asset is not wrongly flagged. Ignored *assets* are never flagged.
+
+If the file does not exist (or is empty), analysis continues normally with the
+built-in defaults — no warning, no error.
+
+### Built-in defaults
+
+These patterns are **always** ignored, even with no config file. User-defined
+patterns are added on top of them (they never replace the defaults):
+
+| Pattern | Source |
+| --- | --- |
+| `**/*.g.dart` | `json_serializable`, `retrofit`, `hive`, … |
+| `**/*.freezed.dart` | `freezed` |
+| `**/*.mocks.dart` | `mockito` |
+| `**/*.gr.dart` | `auto_route` |
+| `.flutter-plugins` | Flutter tool output |
+| `.flutter-plugins-dependencies` | Flutter tool output |
+
+### Pattern syntax
+
+Matching is powered by [`package:glob`](https://pub.dev/packages/glob) against
+**project-relative paths using forward slashes** (e.g. `lib/generated/api.dart`),
+on every platform — including Windows. So:
+
+- `*` matches within a single path segment (no `/`).
+- `**` matches across segments, so `**/*.g.dart` matches `lib/a/b/foo.g.dart`.
+- A trailing `/**` matches everything under a directory at any depth, so
+  `lib/generated/**` matches `lib/generated/foo.dart` and
+  `lib/generated/sub/deep.dart`.
+
+### Example configurations
+
+Generated code only (most projects):
+
+```yaml
+ignore:
+  - "**/*.g.dart"
+  - "**/*.freezed.dart"
+```
+
+Build output and tooling artifacts:
+
+```yaml
+ignore:
+  - "build/**"
+  - ".dart_tool/**"
+```
+
+Legacy assets kept for reference but excluded from analysis:
+
+```yaml
+ignore:
+  - "assets/legacy/**"
+  - "lib/generated/**"
+```
+
 ### `unused-assets` (v1)
 
 Reads directory-style entries under `flutter > assets` in `pubspec.yaml`,
@@ -83,8 +160,10 @@ and reports every `lib/**/*.dart` file not reachable from it.
 - No awareness of reflection, code generation, or routing
   (GoRouter / AutoRoute / Riverpod). Files referenced only by such mechanisms
   may be flagged.
-- Generated files (`*.g.dart`, `*.freezed.dart`) are flagged unless reached via
-  a `part`/`import` directive.
+- Generated files (`*.g.dart`, `*.freezed.dart`, `*.mocks.dart`, `*.gr.dart`)
+  are ignored by default (see
+  [Ignoring files](#ignoring-files-flutter_cleanupyaml)). Add a
+  `.flutter_cleanup.yaml` `ignore:` entry to exclude others.
 - When `lib/main.dart` is absent, no analysis is performed (reachability is
   undefined).
 
@@ -100,7 +179,7 @@ lib/src/
   commands/                One Command per CLI command + base + ReportPrinter
   analysis/                Analyzer interface + AnalysisResult (extension seam)
   models/                  ProjectPaths, ValidationResult, Finding, OutputFormat
-  services/                ProjectValidator, Logger (ANSI output)
+  services/                ProjectValidator, Logger (ANSI output), IgnoreService
   version.dart             Single source of truth for the version
 ```
 

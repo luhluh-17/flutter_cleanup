@@ -8,6 +8,7 @@ import '../analysis/analyzer.dart';
 import '../analysis/path_utils.dart';
 import '../models/finding.dart';
 import '../models/project_paths.dart';
+import '../services/ignore_service.dart';
 
 /// Detects assets declared in a Flutter project's `pubspec.yaml` that are
 /// never referenced from Dart source under `lib/`.
@@ -27,8 +28,13 @@ class UnusedAssetsAnalyzer implements Analyzer {
 
   @override
   Future<AnalysisResult> analyze(ProjectPaths paths) async {
+    final ignore = IgnoreService.forProject(paths.root);
     final declaredDirs = _declaredAssetDirs(paths);
-    final assetFiles = _discoverAssetFiles(paths, declaredDirs);
+    final assetFiles = _discoverAssetFiles(paths, declaredDirs, ignore);
+    // Note: the Dart reference scan below is intentionally *not* ignore-filtered.
+    // Ignored Dart files (e.g. generated *.g.dart) are evidence of asset usage,
+    // not subjects of analysis — excluding them could flag an asset referenced
+    // only from generated code as a false positive.
     final referenced = _collectDartStringLiterals(paths);
 
     final findings = <Finding>[
@@ -70,10 +76,12 @@ class UnusedAssetsAnalyzer implements Analyzer {
 
   /// Recursively collects every file under each declared asset directory,
   /// returning their project-relative POSIX paths. Missing directories are
-  /// skipped.
+  /// skipped, and files matched by [ignore] are excluded so they are never
+  /// flagged as unused.
   List<String> _discoverAssetFiles(
     ProjectPaths paths,
     List<String> declaredDirs,
+    IgnoreService ignore,
   ) {
     final files = <String>[];
     for (final dir in declaredDirs) {
@@ -82,7 +90,8 @@ class UnusedAssetsAnalyzer implements Analyzer {
 
       for (final entity in absDir.listSync(recursive: true)) {
         if (entity is File) {
-          files.add(toPosixRelative(paths.root, entity.path));
+          final rel = toPosixRelative(paths.root, entity.path);
+          if (!ignore.isIgnored(rel)) files.add(rel);
         }
       }
     }

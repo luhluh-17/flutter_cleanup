@@ -30,6 +30,12 @@ void main() {
     file.writeAsStringSync(contents);
   }
 
+  /// Writes a `.flutter_cleanup.yaml` in the project root.
+  void writeIgnoreConfig(String contents) {
+    File(p.join(tempDir.path, '.flutter_cleanup.yaml'))
+        .writeAsStringSync(contents);
+  }
+
   Future<AnalysisResult> run() =>
       const DuplicateCodeAnalyzer().analyze(ProjectPaths(tempDir.path));
 
@@ -194,6 +200,26 @@ class Router {
     writeDart('empty_b.dart', '   \n  // only a comment\n');
     writeDart('tiny_a.dart', 'class A {}');
     writeDart('tiny_b.dart', 'class B {}');
+
+    expect((await run()).findings, isEmpty);
+  });
+
+  test('an ignored file does not participate in comparisons', () async {
+    writePubspec();
+    writeIgnoreConfig('ignore:\n  - "lib/b.dart"\n');
+    final code = source(List.generate(20, (i) => i));
+    writeDart('a.dart', code);
+    writeDart('b.dart', code);
+
+    // With b.dart ignored, there is no second candidate to pair with a.dart.
+    expect((await run()).findings, isEmpty);
+  });
+
+  test('generated *.g.dart duplicates are ignored by default', () async {
+    writePubspec();
+    final code = source(List.generate(20, (i) => i));
+    writeDart('model.g.dart', code);
+    writeDart('other.g.dart', code);
 
     expect((await run()).findings, isEmpty);
   });

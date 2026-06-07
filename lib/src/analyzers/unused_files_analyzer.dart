@@ -8,6 +8,7 @@ import '../analysis/analyzer.dart';
 import '../analysis/path_utils.dart';
 import '../models/finding.dart';
 import '../models/project_paths.dart';
+import '../services/ignore_service.dart';
 
 /// Detects Dart files under `lib/` that are unreachable from `lib/main.dart`.
 ///
@@ -37,11 +38,18 @@ class UnusedFilesAnalyzer implements Analyzer {
     final libDir = Directory(paths.libDir);
     if (!libDir.existsSync()) return AnalysisResult.empty(name);
 
-    // 1. Collect every Dart file under lib/ as a forward-slash key.
+    final ignore = IgnoreService.forProject(paths.root);
+
+    // 1. Collect every Dart file under lib/ as a forward-slash key. Ignored
+    //    files are excluded from the node set, so they neither participate in
+    //    the graph (edges to them simply fall away) nor get reported. Note:
+    //    ignoring lib/main.dart would remove the reachability root and disable
+    //    analysis — the built-in defaults never match it.
     final all = <String>{
       for (final entity in libDir.listSync(recursive: true))
         if (entity is File && p.extension(entity.path) == '.dart')
-          toPosixRelative(paths.root, entity.path),
+          if (!ignore.isIgnored(toPosixRelative(paths.root, entity.path)))
+            toPosixRelative(paths.root, entity.path),
     };
 
     // 2. Without the root, reachability is undefined — report nothing.

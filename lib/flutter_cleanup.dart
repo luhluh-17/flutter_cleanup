@@ -19,6 +19,7 @@ export 'src/models/finding.dart';
 export 'src/models/output_format.dart';
 export 'src/models/project_paths.dart';
 export 'src/models/validation_result.dart';
+export 'src/services/ignore_service.dart';
 export 'src/services/logger.dart';
 export 'src/services/project_validator.dart';
 export 'src/version.dart';

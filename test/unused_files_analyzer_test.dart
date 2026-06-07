@@ -30,6 +30,12 @@ void main() {
     file.writeAsStringSync(contents);
   }
 
+  /// Writes a `.flutter_cleanup.yaml` in the project root.
+  void writeIgnoreConfig(String contents) {
+    File(p.join(tempDir.path, '.flutter_cleanup.yaml'))
+        .writeAsStringSync(contents);
+  }
+
   Future<AnalysisResult> run() =>
       const UnusedFilesAnalyzer().analyze(ProjectPaths(tempDir.path));
 
@@ -143,5 +149,24 @@ void main() {}
 
     final result = await run();
     expect(result.findings, isEmpty);
+  });
+
+  test('an ignored unreachable file is not reported', () async {
+    writePubspec();
+    writeIgnoreConfig('ignore:\n  - "lib/orphan.dart"\n');
+    writeDart('main.dart', 'void main() {}');
+    writeDart('orphan.dart', 'class Orphan {}');
+    writeDart('other_orphan.dart', 'class Other {}');
+
+    // Only the non-ignored orphan is flagged.
+    expect(unusedPaths(await run()), {'lib/other_orphan.dart'});
+  });
+
+  test('a generated *.g.dart orphan is not reported by default', () async {
+    writePubspec();
+    writeDart('main.dart', 'void main() {}');
+    writeDart('model.g.dart', 'class ModelGenerated {}');
+
+    expect((await run()).findings, isEmpty);
   });
 }
