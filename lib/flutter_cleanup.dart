@@ -3,6 +3,7 @@ library;
 
 export 'src/analysis/analysis_result.dart';
 export 'src/analysis/analyzer.dart';
+export 'src/analyzers/unused_assets_analyzer.dart';
 export 'src/cli/cli_runner.dart';
 export 'src/commands/base_command.dart';
 export 'src/commands/report_printer.dart';

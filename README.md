@@ -30,8 +30,9 @@ dart run flutter_cleanup scan
 # Validate a project at a specific path
 dart run flutter_cleanup scan --path ../my_app
 
-# Find unused assets (analysis not yet implemented — validates only)
+# Find declared assets that are never referenced from lib/**
 dart run flutter_cleanup unused-assets
+dart run flutter_cleanup unused-assets --path ../my_app
 
 # Print the version
 dart run flutter_cleanup version
@@ -42,6 +43,25 @@ dart run flutter_cleanup --help
 
 `scan` exits with a non-zero status if the target is not a valid
 Flutter/Dart project (missing `pubspec.yaml` or `lib/`).
+
+### `unused-assets` (v1)
+
+Reads directory-style entries under `flutter > assets` in `pubspec.yaml`,
+recursively collects the files in those directories, then reports any whose
+project-relative path never appears as a string literal in `lib/**`.
+
+**Known limitations (v1):**
+
+- Only directory-style entries (e.g. `assets/images/`) are analyzed;
+  single-file entries (`assets/images/logo.png`) are ignored.
+- Matching is string/RegExp based (no AST). Dynamic references such as
+  `Image.asset(variable)` or built-up/interpolated paths are not resolved, so
+  the asset may be reported as unused.
+- Any string literal equal to the asset path counts as a use — even one inside
+  a comment-like string. This is the safe direction: it avoids flagging a
+  used asset for deletion, at the cost of occasionally missing a truly unused
+  one.
+- Only `lib/**` is scanned for references (not `test/`, `bin/`, etc.).
 
 ## Architecture
 

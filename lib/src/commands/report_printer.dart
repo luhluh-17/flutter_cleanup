@@ -1,3 +1,5 @@
+import '../analysis/analysis_result.dart';
+import '../models/finding.dart';
 import '../models/output_format.dart';
 import '../models/validation_result.dart';
 import '../services/logger.dart';
@@ -20,6 +22,39 @@ class ReportPrinter {
         _validationReportText(report);
       case OutputFormat.json:
         throw UnimplementedError('JSON output is not implemented yet.');
+    }
+  }
+
+  /// Renders the findings of an [AnalysisResult].
+  void findings(AnalysisResult result) {
+    switch (format) {
+      case OutputFormat.text:
+        _findingsText(result);
+      case OutputFormat.json:
+        throw UnimplementedError('JSON output is not implemented yet.');
+    }
+  }
+
+  void _findingsText(AnalysisResult result) {
+    _logger.heading('Unused assets');
+    for (final finding in result.findings) {
+      final line = '${finding.path} — ${finding.message}';
+      switch (finding.severity) {
+        case Severity.info:
+          _logger.info(line);
+        case Severity.warning:
+          _logger.warn(line);
+        case Severity.error:
+          _logger.error(line);
+      }
+    }
+    _logger.blank();
+
+    final count = result.findings.length;
+    if (count == 0) {
+      _logger.success('No unused assets found.');
+    } else {
+      _logger.warn('$count unused asset${count == 1 ? '' : 's'} found.');
     }
   }
 
