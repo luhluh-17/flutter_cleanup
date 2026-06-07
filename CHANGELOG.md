@@ -12,3 +12,6 @@
 - `unused-assets`: first real analyzer. Reads directory-style entries from
   `flutter > assets`, recursively discovers asset files, and reports any not
   referenced as a string literal in `lib/**` (string/RegExp matching, no AST).
+- `unused-files`: reachability analyzer. Builds an import/export/part graph of
+  `lib/**`, treats `lib/main.dart` as the root, and reports unreachable Dart
+  files (directive parsing, no AST).

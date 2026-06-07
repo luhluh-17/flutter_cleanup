@@ -17,6 +17,9 @@ class ProjectPaths {
   /// Absolute path to the project's `lib/` directory.
   String get libDir => p.join(root, 'lib');
 
+  /// Absolute path to the conventional application entrypoint, `lib/main.dart`.
+  String get mainEntrypoint => p.join(libDir, 'main.dart');
+
   /// Absolute path to the project's `assets/` directory.
   String get assetsDir => p.join(root, 'assets');
 }

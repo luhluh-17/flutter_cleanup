@@ -26,17 +26,28 @@ class ReportPrinter {
   }
 
   /// Renders the findings of an [AnalysisResult].
-  void findings(AnalysisResult result) {
+  ///
+  /// [title] is the section heading; [itemNoun] is the singular noun used in the
+  /// summary line (e.g. `'unused asset'`), pluralized by appending `s`.
+  void findings(
+    AnalysisResult result, {
+    required String title,
+    required String itemNoun,
+  }) {
     switch (format) {
       case OutputFormat.text:
-        _findingsText(result);
+        _findingsText(result, title: title, itemNoun: itemNoun);
       case OutputFormat.json:
         throw UnimplementedError('JSON output is not implemented yet.');
     }
   }
 
-  void _findingsText(AnalysisResult result) {
-    _logger.heading('Unused assets');
+  void _findingsText(
+    AnalysisResult result, {
+    required String title,
+    required String itemNoun,
+  }) {
+    _logger.heading(title);
     for (final finding in result.findings) {
       final line = '${finding.path} — ${finding.message}';
       switch (finding.severity) {
@@ -51,10 +62,11 @@ class ReportPrinter {
     _logger.blank();
 
     final count = result.findings.length;
+    final plural = '${itemNoun}s';
     if (count == 0) {
-      _logger.success('No unused assets found.');
+      _logger.success('No $plural found.');
     } else {
-      _logger.warn('$count unused asset${count == 1 ? '' : 's'} found.');
+      _logger.warn('$count ${count == 1 ? itemNoun : plural} found.');
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:args/command_runner.dart';
 
 import '../commands/scan_command.dart';
 import '../commands/unused_assets_command.dart';
+import '../commands/unused_files_command.dart';
 import '../commands/version_command.dart';
 import '../services/logger.dart';
 
@@ -23,6 +24,7 @@ class CliRunner {
     )
       ..addCommand(ScanCommand(logger: _logger))
       ..addCommand(UnusedAssetsCommand(logger: _logger))
+      ..addCommand(UnusedFilesCommand(logger: _logger))
       ..addCommand(VersionCommand(logger: _logger));
     return runner;
   }

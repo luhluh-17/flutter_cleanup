@@ -34,6 +34,10 @@ dart run flutter_cleanup scan --path ../my_app
 dart run flutter_cleanup unused-assets
 dart run flutter_cleanup unused-assets --path ../my_app
 
+# Find Dart files under lib/ unreachable from lib/main.dart
+dart run flutter_cleanup unused-files
+dart run flutter_cleanup unused-files --path ../my_app
+
 # Print the version
 dart run flutter_cleanup version
 
@@ -62,6 +66,27 @@ project-relative path never appears as a string literal in `lib/**`.
   used asset for deletion, at the cost of occasionally missing a truly unused
   one.
 - Only `lib/**` is scanned for references (not `test/`, `bin/`, etc.).
+
+### `unused-files` (v1)
+
+Builds an import/export/part graph of the Dart files under `lib/` (parsing
+directives, no AST), treats `lib/main.dart` as the single reachability root,
+and reports every `lib/**/*.dart` file not reachable from it.
+
+**Known limitations (v1):**
+
+- Single entrypoint: only `lib/main.dart` is a root. Files reachable only from
+  `bin/`, `test/`, or other app entrypoints are reported as unused.
+- No AST: directives are matched by RegExp at line start. Conditional-import
+  alternatives (`import 'a' if (...) 'b';`) and directive-like text in
+  comments/strings may be mis-handled.
+- No awareness of reflection, code generation, or routing
+  (GoRouter / AutoRoute / Riverpod). Files referenced only by such mechanisms
+  may be flagged.
+- Generated files (`*.g.dart`, `*.freezed.dart`) are flagged unless reached via
+  a `part`/`import` directive.
+- When `lib/main.dart` is absent, no analysis is performed (reachability is
+  undefined).
 
 ## Architecture
 

@@ -5,6 +5,7 @@ import 'package:yaml/yaml.dart';
 
 import '../analysis/analysis_result.dart';
 import '../analysis/analyzer.dart';
+import '../analysis/path_utils.dart';
 import '../models/finding.dart';
 import '../models/project_paths.dart';
 
@@ -81,7 +82,7 @@ class UnusedAssetsAnalyzer implements Analyzer {
 
       for (final entity in absDir.listSync(recursive: true)) {
         if (entity is File) {
-          files.add(_toPosixRelative(paths.root, entity.path));
+          files.add(toPosixRelative(paths.root, entity.path));
         }
       }
     }
@@ -110,12 +111,5 @@ class UnusedAssetsAnalyzer implements Analyzer {
       }
     }
     return literals;
-  }
-
-  /// Converts an absolute file path into a project-relative path using forward
-  /// slashes, so comparisons are stable across Windows, macOS, and Linux.
-  String _toPosixRelative(String root, String filePath) {
-    final relative = p.relative(filePath, from: root);
-    return p.split(relative).join('/');
   }
 }

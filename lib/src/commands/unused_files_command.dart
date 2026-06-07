@@ -1,34 +1,37 @@
+import 'dart:io';
+
 import '../analysis/analyzer.dart';
-import '../analyzers/unused_assets_analyzer.dart';
+import '../analyzers/unused_files_analyzer.dart';
 import '../models/project_paths.dart';
 import '../services/logger.dart';
 import '../services/project_validator.dart';
 import 'base_command.dart';
 import 'report_printer.dart';
 
-/// Reports assets declared in the project that appear to be unused.
+/// Reports Dart files under `lib/` that are unreachable from `lib/main.dart`.
 ///
-/// Validates the project, then runs the [UnusedAssetsAnalyzer] and renders its
+/// Validates the project, then runs the [UnusedFilesAnalyzer] and renders its
 /// findings via [ReportPrinter]. The command does no analysis itself and the
 /// analyzer does no printing — each layer has a single responsibility.
-class UnusedAssetsCommand extends FlutterCleanupCommand {
-  UnusedAssetsCommand({
+class UnusedFilesCommand extends FlutterCleanupCommand {
+  UnusedFilesCommand({
     Logger? logger,
     ProjectValidator? validator,
     Analyzer? analyzer,
   })  : _logger = logger ?? Logger(),
         _validator = validator ?? const ProjectValidator(),
-        _analyzer = analyzer ?? const UnusedAssetsAnalyzer();
+        _analyzer = analyzer ?? const UnusedFilesAnalyzer();
 
   final Logger _logger;
   final ProjectValidator _validator;
   final Analyzer _analyzer;
 
   @override
-  String get name => 'unused-assets';
+  String get name => 'unused-files';
 
   @override
-  String get description => 'Find declared assets that are never referenced.';
+  String get description =>
+      'Find Dart files under lib/ unreachable from lib/main.dart.';
 
   @override
   Future<int> run() async {
@@ -46,8 +49,13 @@ class UnusedAssetsCommand extends FlutterCleanupCommand {
     }
 
     _logger.blank();
+    if (!File(paths.mainEntrypoint).existsSync()) {
+      _logger.info('lib/main.dart not found — skipping reachability analysis.');
+      return 0;
+    }
+
     final result = await _analyzer.analyze(paths);
-    printer.findings(result, title: 'Unused assets', itemNoun: 'unused asset');
+    printer.findings(result, title: 'Unused files', itemNoun: 'unused file');
 
     return 0;
   }
