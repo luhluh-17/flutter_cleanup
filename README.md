@@ -38,6 +38,18 @@ dart run flutter_cleanup unused-assets --path ../my_app
 dart run flutter_cleanup unused-files
 dart run flutter_cleanup unused-files --path ../my_app
 
+# Find highly similar (likely copy-pasted) Dart files under lib/
+dart run flutter_cleanup duplicate-code
+dart run flutter_cleanup duplicate-code --path ../my_app
+
+# Find structurally highly similar Flutter widgets under lib/
+dart run flutter_cleanup duplicate-widgets
+dart run flutter_cleanup duplicate-widgets --path ../my_app
+
+# Run every analyzer above in a single pass
+dart run flutter_cleanup all
+dart run flutter_cleanup all --path ../my_app
+
 # Print the version
 dart run flutter_cleanup version
 
@@ -80,9 +92,10 @@ ignore:
   - "assets/legacy/**"
 ```
 
-The same ignore rules apply across `unused-assets`, `unused-files`, and
-`duplicate-code`. Ignored paths are never reported, never enter the
-import/export graph, and never participate in duplicate comparisons.
+The same ignore rules apply across `unused-assets`, `unused-files`,
+`duplicate-code`, and `duplicate-widgets` (and therefore `all`). Ignored paths
+are never reported, never enter the import/export graph, and never participate in
+duplicate comparisons.
 
 > One deliberate exception: for `unused-assets`, ignored Dart files are still
 > *read* when looking for asset references. A generated file such as
@@ -209,6 +222,78 @@ and reports every `lib/**/*.dart` file not reachable from it.
 - When `lib/main.dart` is absent, no analysis is performed (reachability is
   undefined).
 
+### `duplicate-widgets`
+
+Finds Flutter widgets whose **widget-tree structure** is highly similar — likely
+copy-pasted UI. This is a different signal from `duplicate-code`: that command
+compares whole *files* as normalized token streams, while this one compares the
+*structure* of each widget recovered from the Dart AST.
+
+```bash
+dart run flutter_cleanup duplicate-widgets --path ../my_app
+```
+
+**How it works:**
+
+- **Discovery.** Walks `lib/**/*.dart` (honoring `.flutter_cleanup.yaml` and the
+  built-in default ignores), parsing each file with the `analyzer` package. It
+  collects every `StatelessWidget` and `State` subclass that has a `build()`
+  method. A `StatefulWidget`'s tree is read from its companion `State` class;
+  the widget name is recovered from `extends State<Foo>`.
+- **Structural fingerprint.** Each `build()` body is reduced to the pre-order
+  sequence of *widget constructor names* (`Card`, `Column`, `Text`,
+  `ElevatedButton`, …). Strings, numbers, identifiers, and callback bodies are
+  ignored — only structure remains. A small blocklist drops non-widget value
+  types (`EdgeInsets`, `Color`, `TextStyle`, …).
+- **Similarity.** Fingerprints are compared with **Jaccard similarity over
+  size-2 shingles** (adjacent widget pairs), the same scoring approach as
+  `duplicate-code`. Pairs scoring at or above the **similarity threshold
+  (`0.85`)** are reported, one `Finding` per pair.
+- **Minimum widget size.** Widgets with fewer than **`minWidgetNodes` (`8`)**
+  fingerprint nodes are ignored. Tiny widgets (`Text(...)`,
+  `Container(child: Text(...))`) look alike to almost everything and would only
+  add noise.
+
+Each finding includes the node count, which is useful when tuning the threshold:
+
+```text
+Duplicate Widgets
+─────────────────
+lib/login_card.dart — Widget "LoginCard" is highly similar to "RegisterCard" (96% similarity, 24 nodes).
+
+! 1 duplicate widget pair found.
+```
+
+**Known limitations:**
+
+- **Helper methods are not analyzed.** Only the `build()` body is walked; widgets
+  extracted into helpers (`Widget _buildHeader() => …`) are invisible and are not
+  inlined.
+- **Widget trees are extracted only from `build()`** — not from other methods or
+  top-level widget-returning functions.
+- **No element resolution.** Parsing is syntactic: a PascalCase identifier in
+  call position is *assumed* to be a widget/value constructor (mitigated by the
+  small value-type blocklist).
+- **No framework awareness** — Riverpod, GoRouter, and code-generation patterns
+  are not understood.
+- **O(n²) pairwise comparison.** Fine for typical projects; not tuned for very
+  large monorepos.
+
+### `all`
+
+Runs every analyzer (`unused-assets`, `unused-files`, `duplicate-code`,
+`duplicate-widgets`) in a single pass. The project is validated once, then each
+analyzer's findings are printed under its own heading.
+
+```bash
+dart run flutter_cleanup all --path ../my_app
+```
+
+Like the individual commands, it exits non-zero only when validation fails
+(missing `pubspec.yaml` or `lib/`); findings themselves do not change the exit
+code. When `lib/main.dart` is absent, the `unused-files` section is skipped (its
+reachability root is undefined) while the other analyzers still run.
+
 ## Architecture
 
 The CLI is built on `package:args` `CommandRunner` with a layered structure
@@ -233,9 +318,9 @@ shared `--path` option and an `outputFormat` hook. Output goes through
 
 ### Command roadmap
 
-`scan`, `version`, and `unused-assets` exist today. The architecture is ready
-for `unused-files`, `graph`, and `doctor` to be added the same way — no core
-changes needed.
+`scan`, `version`, `unused-assets`, `unused-files`, `duplicate-code`,
+`duplicate-widgets`, and `all` exist today. The architecture is ready for
+`graph` and `doctor` to be added the same way — no core changes needed.
 
 ### Adding a command
 

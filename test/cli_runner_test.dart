@@ -61,4 +61,58 @@ void main() {
       expect(await runner().run(['unused-assets', '--path', tempDir.path]), 0);
     });
   });
+
+  group('duplicate-widgets', () {
+    late Directory tempDir;
+
+    setUp(() {
+      tempDir = Directory.systemTemp.createTempSync('flutter_cleanup_cli_');
+      File(p.join(tempDir.path, 'pubspec.yaml')).writeAsStringSync('name: x\n');
+      Directory(p.join(tempDir.path, 'lib')).createSync();
+    });
+
+    tearDown(() {
+      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    });
+
+    test('returns 0 for a valid project', () async {
+      expect(
+        await runner().run(['duplicate-widgets', '--path', tempDir.path]),
+        0,
+      );
+    });
+
+    test('returns 1 for an invalid project', () async {
+      tempDir.deleteSync(recursive: true);
+      tempDir.createSync();
+      expect(
+        await runner().run(['duplicate-widgets', '--path', tempDir.path]),
+        1,
+      );
+    });
+  });
+
+  group('all', () {
+    late Directory tempDir;
+
+    setUp(() {
+      tempDir = Directory.systemTemp.createTempSync('flutter_cleanup_cli_');
+      File(p.join(tempDir.path, 'pubspec.yaml')).writeAsStringSync('name: x\n');
+      Directory(p.join(tempDir.path, 'lib')).createSync();
+    });
+
+    tearDown(() {
+      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    });
+
+    test('runs every analyzer and returns 0 for a valid project', () async {
+      expect(await runner().run(['all', '--path', tempDir.path]), 0);
+    });
+
+    test('returns 1 for an invalid project', () async {
+      tempDir.deleteSync(recursive: true);
+      tempDir.createSync();
+      expect(await runner().run(['all', '--path', tempDir.path]), 1);
+    });
+  });
 }
