@@ -138,6 +138,7 @@ class DuplicateWidgetsAnalyzer implements Analyzer {
             path: a.filePath,
             severity: Severity.info,
             message: 'Widget "${a.name}" is highly similar to "${b.name}" '
+                'in ${b.filePath} '
                 '($percent% similarity, ${a.fingerprint.length} nodes).',
           ));
         }

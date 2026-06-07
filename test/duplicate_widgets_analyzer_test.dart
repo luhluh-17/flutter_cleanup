@@ -239,6 +239,7 @@ class $name extends StatelessWidget {
     expect(
       finding.message,
       'Widget "LoginCard" is highly similar to "RegisterCard" '
+      'in lib/src/widgets/register_card.dart '
       '(100% similarity, 11 nodes).',
     );
   });

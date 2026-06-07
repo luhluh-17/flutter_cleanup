@@ -259,7 +259,7 @@ Each finding includes the node count, which is useful when tuning the threshold:
 ```text
 Duplicate Widgets
 ─────────────────
-lib/login_card.dart — Widget "LoginCard" is highly similar to "RegisterCard" (96% similarity, 24 nodes).
+lib/login_card.dart — Widget "LoginCard" is highly similar to "RegisterCard" in lib/register_card.dart (96% similarity, 24 nodes).
 
 ! 1 duplicate widget pair found.
 ```
