@@ -1,5 +1,6 @@
 import 'package:args/command_runner.dart';
 
+import '../commands/duplicate_code_command.dart';
 import '../commands/scan_command.dart';
 import '../commands/unused_assets_command.dart';
 import '../commands/unused_files_command.dart';
@@ -23,6 +24,7 @@ class CliRunner {
           'relationships in Flutter projects.',
     )
       ..addCommand(ScanCommand(logger: _logger))
+      ..addCommand(DuplicateCodeCommand(logger: _logger))
       ..addCommand(UnusedAssetsCommand(logger: _logger))
       ..addCommand(UnusedFilesCommand(logger: _logger))
       ..addCommand(VersionCommand(logger: _logger));
