@@ -103,8 +103,30 @@ patterns are added on top of them (they never replace the defaults):
 | `**/*.freezed.dart` | `freezed` |
 | `**/*.mocks.dart` | `mockito` |
 | `**/*.gr.dart` | `auto_route` |
+| `**/*.pb.dart` | protobuf / gRPC (`protoc-gen-dart`) |
+| `**/*.pbgrpc.dart` | protobuf / gRPC (`protoc-gen-dart`) |
+| `**/*.pbjson.dart` | protobuf / gRPC (`protoc-gen-dart`) |
+| `**/*.pbenum.dart` | protobuf / gRPC (`protoc-gen-dart`) |
 | `.flutter-plugins` | Flutter tool output |
 | `.flutter-plugins-dependencies` | Flutter tool output |
+
+#### Generated protobuf artifacts
+
+`protoc-gen-dart` emits a fixed set of files for every `.proto`, regardless of
+whether anything imports them:
+
+```text
+activity.pb.dart        // message classes
+activity.pbgrpc.dart    // gRPC service stubs
+activity.pbjson.dart    // JSON/reflection descriptors
+activity.pbenum.dart    // enum stubs (emitted even when there are no enums)
+```
+
+The `*.pbjson.dart` and `*.pbenum.dart` files in particular are descriptors and
+stubs that are intentionally never imported, so `unused-files` would otherwise
+flag them en masse — even though the underlying `.proto` definitions and gRPC
+services are all in active use. They are generated implementation artifacts, not
+meaningful cleanup targets, so they are ignored by default.
 
 ### Pattern syntax
 
@@ -179,8 +201,9 @@ and reports every `lib/**/*.dart` file not reachable from it.
 - No awareness of reflection, code generation, or routing
   (GoRouter / AutoRoute / Riverpod). Files referenced only by such mechanisms
   may be flagged.
-- Generated files (`*.g.dart`, `*.freezed.dart`, `*.mocks.dart`, `*.gr.dart`)
-  are ignored by default (see
+- Generated files (`*.g.dart`, `*.freezed.dart`, `*.mocks.dart`, `*.gr.dart`,
+  and the protobuf set `*.pb.dart` / `*.pbgrpc.dart` / `*.pbjson.dart` /
+  `*.pbenum.dart`) are ignored by default (see
   [Ignoring files](#ignoring-files-flutter_cleanupyaml)). Add a
   `.flutter_cleanup.yaml` `ignore:` entry to exclude others.
 - When `lib/main.dart` is absent, no analysis is performed (reachability is

@@ -63,12 +63,20 @@ class IgnoreService {
   /// - `**/*.freezed.dart` — freezed
   /// - `**/*.mocks.dart` — mockito
   /// - `**/*.gr.dart` — auto_route
+  /// - `**/*.pb.dart`, `**/*.pbgrpc.dart`, `**/*.pbjson.dart`,
+  ///   `**/*.pbenum.dart` — protobuf / gRPC (`protoc-gen-dart`). These are
+  ///   emitted unconditionally (JSON/reflection descriptors, enum stubs) and are
+  ///   routinely never imported, so they are noise rather than cleanup targets.
   /// - `.flutter-plugins`, `.flutter-plugins-dependencies` — Flutter tool output
   static const List<String> defaultIgnorePatterns = [
     '**/*.g.dart',
     '**/*.freezed.dart',
     '**/*.mocks.dart',
     '**/*.gr.dart',
+    '**/*.pb.dart',
+    '**/*.pbgrpc.dart',
+    '**/*.pbjson.dart',
+    '**/*.pbenum.dart',
     '.flutter-plugins',
     '.flutter-plugins-dependencies',
   ];

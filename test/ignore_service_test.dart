@@ -52,6 +52,7 @@ void main() {
       expect(ignore.isIgnored('lib/feature.dart'), isFalse);
       // User patterns add to defaults, they don't replace them.
       expect(ignore.isIgnored('lib/feature.g.dart'), isTrue);
+      expect(ignore.isIgnored('lib/grpc/feature.pbjson.dart'), isTrue);
     });
 
     test('multiple user patterns each match', () {
@@ -80,12 +81,31 @@ ignore:
       expect(ignore.isIgnored('lib/models/user.dart'), isFalse);
     });
 
+    test('generated protobuf artifacts are ignored without config', () {
+      final ignore = forProject();
+      expect(ignore.isIgnored('lib/grpc/activity.pb.dart'), isTrue);
+      expect(ignore.isIgnored('lib/grpc/activity.pbgrpc.dart'), isTrue);
+      expect(ignore.isIgnored('lib/grpc/activity.pbjson.dart'), isTrue);
+      expect(ignore.isIgnored('lib/grpc/activity.pbenum.dart'), isTrue);
+      // Nested under any depth, matching how protoc lays out generated dirs.
+      expect(
+        ignore.isIgnored('lib/core/grpc/generated/abenflow/v1/common.pbjson.dart'),
+        isTrue,
+      );
+      // A hand-written file that merely sits beside them is not ignored.
+      expect(ignore.isIgnored('lib/grpc/activity_service.dart'), isFalse);
+    });
+
     test('defaultIgnorePatterns documents the exact built-in set', () {
       expect(IgnoreService.defaultIgnorePatterns, [
         '**/*.g.dart',
         '**/*.freezed.dart',
         '**/*.mocks.dart',
         '**/*.gr.dart',
+        '**/*.pb.dart',
+        '**/*.pbgrpc.dart',
+        '**/*.pbjson.dart',
+        '**/*.pbenum.dart',
         '.flutter-plugins',
         '.flutter-plugins-dependencies',
       ]);

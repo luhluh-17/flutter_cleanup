@@ -169,4 +169,13 @@ void main() {}
 
     expect((await run()).findings, isEmpty);
   });
+
+  test('a generated protobuf orphan is not reported by default', () async {
+    writePubspec();
+    writeDart('main.dart', 'void main() {}');
+    // protoc emits descriptor files that are intentionally never imported.
+    writeDart('generated/example.pbjson.dart', 'const example = <String>[];');
+
+    expect((await run()).findings, isEmpty);
+  });
 }
