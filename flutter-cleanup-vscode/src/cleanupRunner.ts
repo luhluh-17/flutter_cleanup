@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import execa from 'execa';
+
+import { runFlutterCleanup, isExecutableNotFound } from './cli';
 
 /**
  * The shared "Flutter Cleanup" Output Channel.
@@ -13,39 +14,11 @@ function getChannel(): vscode.OutputChannel {
   return (channel ??= vscode.window.createOutputChannel('Flutter Cleanup'));
 }
 
-/**
- * Invokes the `flutter_cleanup` CLI with the given arguments.
- *
- * Extracted so future per-analyzer commands (Duplicate Widgets, Unused Files, …)
- * can reuse the exact same execution path — only the args differ.
- */
-function runFlutterCleanup(args: string[], cwd: string) {
-  return execa('flutter_cleanup', args, { cwd });
-}
-
 /** Clears the channel, writes the pretty-printed JSON, and focuses it. */
 function renderJson(output: vscode.OutputChannel, parsed: unknown): void {
   output.clear();
   output.appendLine(JSON.stringify(parsed, null, 2));
   output.show(true);
-}
-
-/**
- * Whether an execa error means the `flutter_cleanup` binary could not be found.
- *
- * POSIX shells surface this as `ENOENT`. On Windows, cross-spawn routes the
- * command through `cmd.exe`, which instead exits 1 with a "not recognized"
- * message on stderr — so both cases must be detected.
- */
-function isExecutableNotFound(err: any): boolean {
-  if (err?.code === 'ENOENT') {
-    return true;
-  }
-  const stderr = typeof err?.stderr === 'string' ? err.stderr : '';
-  return (
-    /is not recognized as an internal or external command/i.test(stderr) ||
-    /command not found/i.test(stderr)
-  );
 }
 
 /**

@@ -6,6 +6,7 @@ import '../analyzers/duplicate_code_analyzer.dart';
 import '../analyzers/duplicate_widgets_analyzer.dart';
 import '../analyzers/unused_assets_analyzer.dart';
 import '../analyzers/unused_files_analyzer.dart';
+import '../architecture/architecture_analyzer.dart';
 import '../models/output_format.dart';
 import '../models/project_paths.dart';
 import '../services/logger.dart';
@@ -28,13 +29,15 @@ class AllCommand extends FlutterCleanupCommand {
     Analyzer? unusedFiles,
     Analyzer? duplicateCode,
     Analyzer? duplicateWidgets,
+    Analyzer? architecture,
   })  : _logger = logger ?? Logger(),
         _validator = validator ?? const ProjectValidator(),
         _unusedAssets = unusedAssets ?? const UnusedAssetsAnalyzer(),
         _unusedFiles = unusedFiles ?? const UnusedFilesAnalyzer(),
         _duplicateCode = duplicateCode ?? const DuplicateCodeAnalyzer(),
         _duplicateWidgets =
-            duplicateWidgets ?? const DuplicateWidgetsAnalyzer();
+            duplicateWidgets ?? const DuplicateWidgetsAnalyzer(),
+        _architecture = architecture ?? ArchitectureAnalyzer();
 
   final Logger _logger;
   final ProjectValidator _validator;
@@ -42,6 +45,7 @@ class AllCommand extends FlutterCleanupCommand {
   final Analyzer _unusedFiles;
   final Analyzer _duplicateCode;
   final Analyzer _duplicateWidgets;
+  final Analyzer _architecture;
 
   @override
   String get name => 'all';
@@ -84,6 +88,11 @@ class AllCommand extends FlutterCleanupCommand {
         analyzer: _duplicateWidgets,
         title: 'Duplicate Widgets',
         itemNoun: 'duplicate widget pair',
+      ),
+      (
+        analyzer: _architecture,
+        title: 'Architecture violations',
+        itemNoun: 'violation',
       ),
     ];
 

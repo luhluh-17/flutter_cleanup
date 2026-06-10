@@ -1,38 +1,47 @@
 {
   "name": "flutter-cleanup-vscode",
   "displayName": "Flutter Cleanup",
-  "description": "Run the flutter_cleanup CLI from VS Code and view its JSON report in an Output Channel.",
+  "description": "Run the flutter_cleanup CLI from VS Code: view its JSON report and surface Clean Architecture (ARCH) violations as diagnostics in the Problems panel.",
   "version": "0.0.1",
   "publisher": "flutter-cleanup",
   "engines": {
     "vscode": "^1.75.0"
   },
   "categories": [
+    "Linters",
     "Other"
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "onCommand:flutterCleanup.runAll"
+    "onCommand:flutterCleanup.runAll",
+    "onCommand:flutterCleanup.analyzeArchitecture"
   ],
   "contributes": {
     "commands": [
       {
         "command": "flutterCleanup.runAll",
         "title": "Flutter Cleanup: Run All"
+      },
+      {
+        "command": "flutterCleanup.analyzeArchitecture",
+        "title": "Flutter Cleanup: Analyze Architecture"
       }
     ]
   },
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "test": "tsc -p ./ && mocha \"out/test/**/*.test.js\"",
     "vscode:prepublish": "npm run compile"
   },
   "dependencies": {
     "execa": "^5.1.1"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.0",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.75.0",
+    "mocha": "^10.4.0",
     "typescript": "^5.4.0"
   }
 }

@@ -1,3 +1,22 @@
+## Unreleased
+
+- `architecture`: new analyzer/command detecting Clean Architecture +
+  Feature-Based + Riverpod violations (ARCH101–503) from the Dart AST. Builds an
+  import/dependency graph, classifies each file's layer, and runs a categorized
+  rule set (layer purity, structure/placement, Riverpod injection, routing,
+  feature boundaries incl. cross-feature imports, circular dependencies, and
+  fan-out). Emits findings with file/line/confidence plus an architecture
+  **score**, a per-category `summary`, `violationsByCode`, and a feature
+  `dependencies` map; `--report` prints the dependency tree. Analysis is
+  syntactic (`"analysisMode": "syntactic-ast"`), so heuristic rules are
+  confidence-graded. Included in `all` and `all --json`.
+- `Finding` gains optional `line`, `column`, and `confidence` fields (omitted
+  from JSON when unset, so existing analyzers' output is unchanged).
+- VS Code extension: new **Analyze Architecture** command publishes ARCH
+  violations to the Problems panel via a `DiagnosticCollection`, with the score
+  surfaced in a notification. CLI invocation extracted to a shared module; the
+  vscode-free diagnostic mapping is unit-tested under Node (mocha).
+
 ## 1.0.0
 
 - Initial CLI foundation built on `package:args` `CommandRunner`.

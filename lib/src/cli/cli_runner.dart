@@ -1,6 +1,7 @@
 import 'package:args/command_runner.dart';
 
 import '../commands/all_command.dart';
+import '../commands/architecture_command.dart';
 import '../commands/duplicate_code_command.dart';
 import '../commands/duplicate_widgets_command.dart';
 import '../commands/scan_command.dart';
@@ -31,6 +32,7 @@ class CliRunner {
       ..addCommand(DuplicateWidgetsCommand(logger: _logger))
       ..addCommand(UnusedAssetsCommand(logger: _logger))
       ..addCommand(UnusedFilesCommand(logger: _logger))
+      ..addCommand(ArchitectureCommand(logger: _logger))
       ..addCommand(AllCommand(logger: _logger))
       ..addCommand(VersionCommand(logger: _logger));
     return runner;

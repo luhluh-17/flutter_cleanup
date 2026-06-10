@@ -46,6 +46,7 @@ void main() {
       'unused-files',
       'duplicate-code',
       'duplicate-widgets',
+      'architecture',
     ]) {
       test('$analyzer --json emits a valid single-analyzer document', () async {
         final result =
@@ -76,18 +77,57 @@ void main() {
       expect(json['schemaVersion'], 1);
 
       final results = json['results'] as List<Object?>;
-      expect(results, hasLength(4));
+      expect(results, hasLength(5));
       expect(
         results
             .map((r) => (r as Map<String, dynamic>)['analyzer'])
             .toList(),
-        ['unused-assets', 'unused-files', 'duplicate-code', 'duplicate-widgets'],
+        [
+          'unused-assets',
+          'unused-files',
+          'duplicate-code',
+          'duplicate-widgets',
+          'architecture',
+        ],
       );
       for (final entry in results.cast<Map<String, dynamic>>()) {
         expect(entry['findings'], isA<List<Object?>>());
         expect(entry.containsKey('schemaVersion'), isFalse,
             reason: 'nested results do not repeat schemaVersion');
       }
+    });
+  });
+
+  group('Finding serialization', () {
+    test('omits optional fields when unset (byte-compatible with v1)', () {
+      const finding = Finding(
+        rule: 'unused_asset',
+        path: 'assets/x.png',
+        severity: Severity.warning,
+        message: 'unused',
+      );
+      expect(finding.toJson(), {
+        'rule': 'unused_asset',
+        'path': 'assets/x.png',
+        'severity': 'warning',
+        'message': 'unused',
+      });
+    });
+
+    test('includes line/column/confidence when set', () {
+      const finding = Finding(
+        rule: 'ARCH101',
+        path: 'lib/x.dart',
+        severity: Severity.error,
+        message: 'bad import',
+        line: 12,
+        column: 3,
+        confidence: Confidence.medium,
+      );
+      final json = finding.toJson();
+      expect(json['line'], 12);
+      expect(json['column'], 3);
+      expect(json['confidence'], 'medium');
     });
   });
 

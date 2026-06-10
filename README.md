@@ -46,6 +46,11 @@ dart run flutter_cleanup duplicate-code --path ../my_app
 dart run flutter_cleanup duplicate-widgets
 dart run flutter_cleanup duplicate-widgets --path ../my_app
 
+# Detect Clean Architecture / Riverpod violations (ARCH101–503) under lib/
+dart run flutter_cleanup architecture
+dart run flutter_cleanup architecture --path ../my_app
+dart run flutter_cleanup architecture --report   # also print the dependency tree
+
 # Run every analyzer above in a single pass
 dart run flutter_cleanup all
 dart run flutter_cleanup all --path ../my_app
@@ -283,11 +288,44 @@ lib/login_card.dart — Widget "LoginCard" is highly similar to "RegisterCard" i
 - **O(n²) pairwise comparison.** Fine for typical projects; not tuned for very
   large monorepos.
 
+### `architecture`
+
+Detects **Clean Architecture + Feature-Based + Riverpod** violations across
+`lib/`, building an import/dependency graph from the Dart AST and checking it
+against a categorized rule set (ARCH101–503). Each finding carries a file, line,
+and a **confidence** (`high`/`medium`/`low`); the command also reports an
+**architecture score** (0–100) and, with `--report`, the feature-dependency tree.
+
+```bash
+dart run flutter_cleanup architecture --path ../my_app
+dart run flutter_cleanup architecture --json        # score + summary + findings
+dart run flutter_cleanup architecture --report      # + feature dependency tree
+```
+
+**Rule categories** (the hundreds digit groups them; score weight in parentheses):
+
+| Range | Category (weight) | Examples |
+| --- | --- | --- |
+| ARCH1xx | Layer dependency & purity (3) | domain imports Dio (101), entity imports model (102), presentation imports datasource (103), illegal layer direction (106), page instantiates repository (110) |
+| ARCH2xx | Structure & placement (2) | feature missing a layer (201–203), use case / model / entity in the wrong folder (204–208), repo impl with no contract (209) |
+| ARCH3xx | Riverpod (2) | notifier constructs its own dependency instead of injecting it (301) |
+| ARCH4xx | Routing (2) | routing outside `core/config/router` (401), feature defines its own `GoRouter` (402), stray route file (403) |
+| ARCH5xx | Feature boundaries (5) | cross-feature import (501), circular feature dependency (502), god-feature fan-out (503) |
+
+The **score** starts at 100 and subtracts each violation's category weight
+(feature-boundary problems cost the most), floored at 0.
+
+**Analysis mode — `syntactic-ast` (no type resolution).** Rules walk the parsed
+AST without an element model, so a few are inherently heuristic and reported at
+`medium` confidence (e.g. 209 can't see typedef aliases or generic bases; 301 only
+flags literal dependency construction; 403 keys on filename). This trade-off is
+surfaced as `"analysisMode": "syntactic-ast"` in the JSON.
+
 ### `all`
 
 Runs every analyzer (`unused-assets`, `unused-files`, `duplicate-code`,
-`duplicate-widgets`) in a single pass. The project is validated once, then each
-analyzer's findings are printed under its own heading.
+`duplicate-widgets`, `architecture`) in a single pass. The project is validated
+once, then each analyzer's findings are printed under its own heading.
 
 ```bash
 dart run flutter_cleanup all --path ../my_app
@@ -339,10 +377,16 @@ Each finding has a stable shape:
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `rule` | string | Analyzer-specific rule id (e.g. `duplicate_widget`). |
+| `rule` | string | Analyzer-specific rule id (e.g. `duplicate_widget`, `ARCH101`). |
 | `path` | string | Project-relative path, forward-slashed. |
 | `severity` | string | One of `info`, `warning`, `error`. |
 | `message` | string | Human-readable description. |
+| `line` | int? | 1-based line. Optional — emitted by `architecture`; omitted otherwise. |
+| `column` | int? | 1-based column. Optional. |
+| `confidence` | string? | `high`/`medium`/`low`. Optional — emitted by `architecture`. |
+
+Optional fields are omitted entirely when unset, so analyzers that work at file
+granularity produce the same document shape as before.
 
 A run with no findings emits `"findings": []`. When `lib/main.dart` is absent,
 `unused-files` still emits a well-formed empty result rather than special output,
@@ -361,10 +405,23 @@ nested results use the same shape as above but omit their own `schemaVersion`
     { "analyzer": "unused-assets", "findings": [] },
     { "analyzer": "unused-files", "findings": [] },
     { "analyzer": "duplicate-code", "findings": [] },
-    { "analyzer": "duplicate-widgets", "findings": [] }
+    { "analyzer": "duplicate-widgets", "findings": [] },
+    {
+      "analyzer": "architecture",
+      "findings": [],
+      "analysisMode": "syntactic-ast",
+      "score": 100,
+      "summary": { "layer": 0, "structure": 0, "riverpod": 0, "routing": 0, "feature": 0 },
+      "violationsByCode": {},
+      "dependencies": {}
+    }
   ]
 }
 ```
+
+The `architecture` result adds `analysisMode`, `score`, `summary`,
+`violationsByCode`, and `dependencies` keys alongside the standard
+`analyzer`/`findings`.
 
 ### Validation failure
 
@@ -399,10 +456,23 @@ lib/src/
   cli/                     CommandRunner setup and command registration
   commands/                One Command per CLI command + base + ReportPrinter
   analysis/                Analyzer interface + AnalysisResult (extension seam)
+  analyzers/               unused-assets/files, duplicate-code/widgets
+  architecture/            ARCH rule engine: definition (ArchitectureDefinition,
+                           Layer), layer classifier, import resolver, dependency
+                           graph, parse-once context, rules/, scoring analyzer
   models/                  ProjectPaths, ValidationResult, Finding, OutputFormat
   services/                ProjectValidator, Logger (ANSI output), IgnoreService
   version.dart             Single source of truth for the version
 ```
+
+The `architecture/` engine is layered for extension: an `ArchitectureDefinition`
+abstracts the architecture style (Clean Architecture is the only implementation
+today, but the layer-direction matrix and forbidden-package set are pluggable),
+and rules implement a small `ArchitectureRule` interface assembled by
+`cleanArchitectureRules()`. Rules emit a rich `ArchitectureViolation` (with
+feature/layer/cycle metadata) that is projected onto the lean `Finding` for
+output — keeping room for a future dashboard or graph view without bloating
+`Finding`.
 
 Project-scoped commands extend `FlutterCleanupCommand`
 ([base_command.dart](lib/src/commands/base_command.dart)), which supplies the
@@ -414,8 +484,8 @@ is rendered. See [JSON output](#json-output---json).
 ### Command roadmap
 
 `scan`, `version`, `unused-assets`, `unused-files`, `duplicate-code`,
-`duplicate-widgets`, and `all` exist today. The architecture is ready for
-`graph` and `doctor` to be added the same way — no core changes needed.
+`duplicate-widgets`, `architecture`, and `all` exist today. The architecture is
+ready for `graph` and `doctor` to be added the same way — no core changes needed.
 
 ### Adding a command
 

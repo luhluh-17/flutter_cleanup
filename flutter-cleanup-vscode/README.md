@@ -1,14 +1,18 @@
 # Flutter Cleanup (VS Code)
 
-A minimal VS Code extension that runs the [`flutter_cleanup`](../) CLI against the
-open workspace and shows its JSON report in an Output Channel.
+A VS Code extension that runs the [`flutter_cleanup`](../) CLI against the open
+workspace. It can dump the raw JSON report into an Output Channel, and — its main
+feature — surface **Clean Architecture (ARCH) violations** inline in the Problems
+panel:
 
-This is an **MVP**. It proves the integration pipeline only:
+> Command → `flutter_cleanup architecture --json` → parse → `DiagnosticCollection`
 
-> VS Code command → `flutter_cleanup all --json` → parse JSON → Output Channel
+Each violation lands on its exact file and line with its `ARCHnxx` code and a
+confidence note, and the architecture **score** is shown in a notification. The
+older **Run All** command (raw JSON → Output Channel) is still available.
 
-There is no Problems-view integration, tree view, code actions, or settings yet —
-those come in later iterations.
+There are no code actions / quick fixes or settings yet — those come in later
+iterations.
 
 ## Requirements
 
@@ -34,10 +38,16 @@ those come in later iterations.
 
 1. Open a Flutter/Dart project folder in VS Code.
 2. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-3. Run **Flutter Cleanup: Run All**.
+3. Run one of:
+   - **Flutter Cleanup: Analyze Architecture** — runs `architecture --json` and
+     publishes every ARCH violation to the Problems panel (one diagnostic per
+     finding, on its file/line, with the `ARCHnxx` code and confidence). A
+     notification reports the architecture score and category summary.
+   - **Flutter Cleanup: Run All** — runs `all --json` and dumps the raw report to
+     the Output Channel.
 
-The results appear in **Output → Flutter Cleanup** as a pretty-printed JSON
-document:
+The **Run All** results appear in **Output → Flutter Cleanup** as a
+pretty-printed JSON document:
 
 ```json
 {
@@ -65,7 +75,14 @@ document:
 ```bash
 npm install
 npm run compile      # or: npm run watch
+npm test             # compile + mocha unit tests (diagnostic mapping)
 ```
 
 Press **F5** in VS Code to launch the Extension Development Host, open a project
-that has `flutter_cleanup` on PATH, and run **Flutter Cleanup: Run All**.
+that has `flutter_cleanup` on PATH, and run **Flutter Cleanup: Analyze
+Architecture** (or **Run All**).
+
+The vscode-free diagnostic mapping lives in `src/diagnosticsMapping.ts` and is
+covered by `src/test/diagnosticsMapping.test.ts`, so it runs under plain Node
+without launching the Extension Host. Full end-to-end tests via
+`@vscode/test-electron` are a follow-up.
