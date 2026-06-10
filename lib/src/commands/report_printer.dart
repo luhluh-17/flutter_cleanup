@@ -133,7 +133,13 @@ class ReportPrinter {
   }) {
     _logger.heading(title);
     for (final finding in result.findings) {
-      final line = '${finding.path} — ${finding.message}';
+      // `path:line[:column]` — the same convention as dart analyze, so the
+      // offending line is actionable straight from the terminal.
+      final location = finding.line == null
+          ? finding.path
+          : '${finding.path}:${finding.line}'
+              '${finding.column == null ? '' : ':${finding.column}'}';
+      final line = '$location — ${finding.message}';
       switch (finding.severity) {
         case Severity.info:
           _logger.info(line);
@@ -141,6 +147,9 @@ class ReportPrinter {
           _logger.warn(line);
         case Severity.error:
           _logger.error(line);
+      }
+      if (finding.recommendation != null) {
+        _logger.plain('    ↳ ${finding.recommendation}');
       }
     }
     _logger.blank();

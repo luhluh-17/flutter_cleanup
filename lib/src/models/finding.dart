@@ -37,6 +37,12 @@ class Finding {
   final int? column;
   final Confidence? confidence;
 
+  /// An actionable fix suggestion, when the producing rule has one.
+  ///
+  /// Optional like [line]/[column]: analyzers without recommendations emit the
+  /// same document as before.
+  final String? recommendation;
+
   const Finding({
     required this.rule,
     required this.path,
@@ -45,6 +51,7 @@ class Finding {
     this.line,
     this.column,
     this.confidence,
+    this.recommendation,
   });
 
   /// Serializes this finding to a JSON-encodable map.
@@ -61,5 +68,6 @@ class Finding {
         if (line != null) 'line': line,
         if (column != null) 'column': column,
         if (confidence != null) 'confidence': confidence!.name,
+        if (recommendation != null) 'recommendation': recommendation,
       };
 }

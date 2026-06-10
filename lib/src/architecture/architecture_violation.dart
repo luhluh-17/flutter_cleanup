@@ -42,6 +42,77 @@ enum RuleCategory {
   }
 }
 
+/// Actionable fix suggestions per ARCH code, surfaced alongside each finding
+/// (text mode prints them under the violation; JSON exposes `recommendation`).
+///
+/// One entry per code keeps suggestions consistent everywhere a code can fire.
+/// Returns null for unknown codes so forgotten entries degrade gracefully.
+String? recommendationFor(String code) => _recommendations[code];
+
+const Map<String, String> _recommendations = {
+  // ARCH1xx — layer dependency & purity
+  'ARCH101': 'Define an abstraction in domain and implement it in data; '
+      'domain must stay framework-free.',
+  'ARCH102': 'Convert models to entities in a data-layer mapper; domain '
+      'should only know entities.',
+  'ARCH103': 'Call a use case or provider instead; only data/repositories '
+      'may touch datasources.',
+  'ARCH104': 'Depend on the domain repository contract and resolve the '
+      'implementation via a provider.',
+  'ARCH105': 'Go through a use case or provider, or move the imported type '
+      'into domain/entities if it is an entity.',
+  'ARCH106': 'Invert the dependency: declare a contract in domain and '
+      'implement it in the outer layer.',
+  'ARCH107': 'Construct Dio inside a data-layer datasource and inject it; '
+      'presentation should call use cases.',
+  'ARCH108': 'Instantiate datasources in the data layer and expose them via '
+      'repositories and providers.',
+  'ARCH109': 'Move toJson/fromJson into a data-layer model or mapper and '
+      'pass typed objects to the UI.',
+  'ARCH110': 'Obtain the repository from a Riverpod provider '
+      '(ref.read/ref.watch) instead of constructing it.',
+  // ARCH2xx — structure & element placement
+  'ARCH201': 'Create the missing data/ layer and move persistence/API code '
+      'there; a feature without one may belong in core/ or another feature.',
+  'ARCH202': 'Create the missing domain/ layer (entities, repositories, '
+      'usecases) to hold the feature\'s business rules.',
+  'ARCH203': 'Create the missing presentation/ layer (pages, providers, '
+      'widgets); a feature without UI may belong in core/.',
+  'ARCH204': 'Move the use case into domain/usecases/.',
+  'ARCH205': 'Move the abstract repository into domain/repositories/ so '
+      'other layers can depend on the contract.',
+  'ARCH206': 'Move the implementation into data/repositories/.',
+  'ARCH207': 'Move the model into data/models/, or make it an entity in '
+      'domain/entities if it has no serialization.',
+  'ARCH208': 'Move the entity into domain/entities/.',
+  'ARCH209': 'Declare "implements <Name>Repository", creating the contract '
+      'in domain/repositories if needed.',
+  'ARCH210': 'Move the folder\'s contents into data/, domain/, or '
+      'presentation/ (application logic usually fits domain/usecases or '
+      'presentation/providers; infrastructure fits data/).',
+  'ARCH211': 'Rename to the standard vocabulary (screens → pages, '
+      'controllers/state → providers, domain models → entities) or nest it '
+      'under a recognized sub-folder.',
+  'ARCH212': 'Move shared code into lib/core/ and feature code into '
+      'lib/features/<feature>/ (routing belongs in core/config/router).',
+  // ARCH3xx — Riverpod
+  'ARCH301': 'Inject the dependency through a provider '
+      '(ref.watch/ref.read) instead of constructing it in the notifier.',
+  // ARCH4xx — routing
+  'ARCH401': 'Move routing definitions into core/config/router/.',
+  'ARCH402': 'Use the central GoRouter in core/config/router and contribute '
+      'routes there.',
+  'ARCH403': 'Move route registration into core/config/router/; features '
+      'should expose pages, not routes.',
+  // ARCH5xx — feature boundaries
+  'ARCH501': 'Extract the shared code into core/, or depend on the other '
+      'feature\'s domain contract (domain/repositories) instead.',
+  'ARCH502': 'Break the cycle: invert one direction via a domain contract '
+      'or move the shared types into core/.',
+  'ARCH503': 'Split the feature or extract shared building blocks into '
+      'core/ to reduce fan-out.',
+};
+
 /// A rule violation in the analyzer's rich internal form.
 ///
 /// Rules emit [ArchitectureViolation]s, not [Finding]s, so they can carry extra
@@ -108,5 +179,6 @@ class ArchitectureViolation {
         line: line,
         column: column,
         confidence: confidence,
+        recommendation: recommendationFor(code),
       );
 }
