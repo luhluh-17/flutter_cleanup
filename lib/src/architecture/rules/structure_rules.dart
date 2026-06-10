@@ -102,6 +102,166 @@ class ElementPlacementRule implements ArchitectureRule {
   }
 }
 
+/// ARCH210–212 — strict folder vocabulary: every analyzed file must live in a
+/// recognized location, so nothing silently escapes the layer rules.
+///
+/// Files in unrecognized folders are classified `Layer.unknown` and skipped by
+/// the dependency/purity rules (ARCH1xx). Without this rule that is an
+/// invisible blind spot; with it, every blind spot is reported:
+///
+/// - **ARCH210** — a folder directly under a feature that is not `data/`,
+///   `domain/`, or `presentation/` (e.g. `application/`, `infrastructure/`,
+///   `state/`), or a loose `.dart` file directly under the feature root.
+/// - **ARCH211** — a sub-folder directly under a layer that is not in that
+///   layer's vocabulary (`data/{datasources,models,repositories}`,
+///   `domain/{entities,repositories,usecases}`,
+///   `presentation/{pages,providers,widgets}`). Deeper organizational folders
+///   under a recognized sub-folder (e.g. `presentation/widgets/fields/`) are
+///   allowed, as are loose files directly under a layer.
+/// - **ARCH212** — a top-level folder under `lib/` other than `core/` and
+///   `features/` (e.g. `lib/routing/`). Loose files directly under `lib/`
+///   (`main.dart`, `app.dart`) are allowed.
+///
+/// Each offending folder is reported once (anchored to its first file by path),
+/// not once per file. Detection is derived from analyzed Dart file paths, so a
+/// folder containing no Dart files is not reported — it also cannot affect the
+/// architecture.
+class StructureVocabularyRule implements ArchitectureRule {
+  const StructureVocabularyRule();
+
+  static const _layerDirs = {'data', 'domain', 'presentation'};
+
+  static const _sublayerDirsByLayer = {
+    'data': {'datasources', 'models', 'repositories'},
+    'domain': {'entities', 'repositories', 'usecases'},
+    'presentation': {'pages', 'providers', 'widgets'},
+  };
+
+  @override
+  String get name => 'structure-vocabulary';
+
+  @override
+  Iterable<ArchitectureViolation> check(ArchitectureContext context) sync* {
+    // folder path → first (lowest-sorted) file inside it, for stable anchors.
+    final unknownTopLevel = <String, String>{};
+    final unknownLayerDirs = <String, (String, String)>{}; // path → (feature, anchor)
+    final unknownSublayers = <String, (String, Layer, String)>{};
+    final looseFeatureFiles = <(String, String)>[];
+
+    void record(Map<String, String> map, String folder, String file) {
+      final current = map[folder];
+      if (current == null || file.compareTo(current) < 0) map[folder] = file;
+    }
+
+    for (final file in context.files) {
+      final segments = file.relPath.split('/');
+      if (segments.length < 2 || segments.first != 'lib') continue;
+
+      // ARCH212 — lib/<dir>/** where <dir> is not core/features.
+      if (segments.length >= 3 &&
+          segments[1] != 'core' &&
+          segments[1] != 'features') {
+        record(unknownTopLevel, 'lib/${segments[1]}', file.relPath);
+        continue;
+      }
+      if (segments[1] != 'features') continue;
+
+      // ARCH210 — loose file directly under the feature root.
+      if (segments.length == 4) {
+        looseFeatureFiles.add((segments[2], file.relPath));
+        continue;
+      }
+      if (segments.length < 5) continue;
+
+      final feature = segments[2];
+      final layerDir = segments[3];
+
+      // ARCH210 — unrecognized layer folder under a feature.
+      if (!_layerDirs.contains(layerDir)) {
+        final folder = 'lib/features/$feature/$layerDir';
+        final current = unknownLayerDirs[folder];
+        if (current == null || file.relPath.compareTo(current.$2) < 0) {
+          unknownLayerDirs[folder] = (feature, file.relPath);
+        }
+        continue;
+      }
+
+      // ARCH211 — unrecognized sub-folder directly under a layer.
+      if (segments.length >= 6 &&
+          !_sublayerDirsByLayer[layerDir]!.contains(segments[4])) {
+        final folder = 'lib/features/$feature/$layerDir/${segments[4]}';
+        final current = unknownSublayers[folder];
+        if (current == null || file.relPath.compareTo(current.$3) < 0) {
+          unknownSublayers[folder] =
+              (feature, file.layer.layer, file.relPath);
+        }
+      }
+    }
+
+    for (final folder in unknownLayerDirs.keys.toList()..sort()) {
+      final (feature, anchor) = unknownLayerDirs[folder]!;
+      yield ArchitectureViolation(
+        code: 'ARCH210',
+        severity: Severity.warning,
+        confidence: Confidence.high,
+        filePath: anchor,
+        line: 1,
+        featureName: feature,
+        relatedFiles: [folder],
+        message: 'Unrecognized folder "$folder" — feature folders must be '
+            'data/, domain/, or presentation/. Files in it are not checked by '
+            'the layer rules.',
+      );
+    }
+
+    for (final (feature, file) in looseFeatureFiles..sort((a, b) => a.$2.compareTo(b.$2))) {
+      yield ArchitectureViolation(
+        code: 'ARCH210',
+        severity: Severity.warning,
+        confidence: Confidence.high,
+        filePath: file,
+        line: 1,
+        featureName: feature,
+        message: 'File is outside any layer folder — feature files must live '
+            'under data/, domain/, or presentation/.',
+      );
+    }
+
+    for (final folder in unknownSublayers.keys.toList()..sort()) {
+      final (feature, layer, anchor) = unknownSublayers[folder]!;
+      final layerDir = folder.split('/')[3];
+      final allowed =
+          (_sublayerDirsByLayer[layerDir]!.toList()..sort()).join('/, ');
+      yield ArchitectureViolation(
+        code: 'ARCH211',
+        severity: Severity.warning,
+        confidence: Confidence.high,
+        filePath: anchor,
+        line: 1,
+        featureName: feature,
+        layer: layer,
+        relatedFiles: [folder],
+        message: 'Unrecognized $layerDir sub-folder "$folder" — allowed: '
+            '$allowed/.',
+      );
+    }
+
+    for (final folder in unknownTopLevel.keys.toList()..sort()) {
+      yield ArchitectureViolation(
+        code: 'ARCH212',
+        severity: Severity.warning,
+        confidence: Confidence.high,
+        filePath: unknownTopLevel[folder]!,
+        line: 1,
+        relatedFiles: [folder],
+        message: 'Folder "$folder" is outside the architecture — top-level '
+            'folders must be lib/core/ or lib/features/. Files in it are not '
+            'checked by the layer rules.',
+      );
+    }
+  }
+}
+
 /// ARCH209 — a repository implementation must implement a domain repository
 /// contract (`implements …Repository`).
 ///

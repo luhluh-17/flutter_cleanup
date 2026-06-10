@@ -19,6 +19,7 @@ List<ArchitectureRule> cleanArchitectureRules() => const [
       FeatureCompletenessRule(),
       ElementPlacementRule(),
       RepositoryContractRule(),
+      StructureVocabularyRule(),
       // ARCH3xx — Riverpod
       RiverpodInjectionRule(),
       // ARCH4xx — routing
