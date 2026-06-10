@@ -73,6 +73,72 @@ void main() {
     expect(raw, contains('    ↳ Extract the shared code into core/.'));
   });
 
+  test('identical findings are grouped with one message and recommendation',
+      () async {
+    Finding cross(String path, int line) => Finding(
+          rule: 'ARCH501',
+          path: path,
+          severity: Severity.warning,
+          message: 'Cross-feature import: "a" must not import "b".',
+          line: line,
+          recommendation: 'Extract the shared code into core/.',
+        );
+
+    final raw = await renderText(AnalysisResult(
+      analyzerName: 'architecture',
+      findings: [
+        cross('lib/features/a/presentation/widgets/z.dart', 9),
+        cross('lib/features/a/presentation/widgets/w.dart', 5),
+        cross('lib/features/a/presentation/widgets/w.dart', 6),
+      ],
+    ));
+
+    // One headline with the count, locations sorted by path then line,
+    // and the recommendation printed exactly once.
+    expect(
+        raw,
+        contains('Cross-feature import: "a" must not import "b". '
+            '(3 occurrences)\n'
+            '    lib/features/a/presentation/widgets/w.dart:5\n'
+            '    lib/features/a/presentation/widgets/w.dart:6\n'
+            '    lib/features/a/presentation/widgets/z.dart:9\n'
+            '    ↳ Extract the shared code into core/.'));
+    expect('Cross-feature import'.allMatches(raw), hasLength(1));
+    expect(raw, contains('3 items found (1 distinct issue).'));
+  });
+
+  test('different messages stay as separate classic lines', () async {
+    final raw = await renderText(AnalysisResult(
+      analyzerName: 'architecture',
+      findings: const [
+        Finding(
+          rule: 'ARCH105',
+          path: 'lib/features/a/presentation/widgets/w.dart',
+          severity: Severity.warning,
+          message: 'Presentation may only access use cases (imported domain).',
+          line: 4,
+        ),
+        Finding(
+          rule: 'ARCH105',
+          path: 'lib/features/b/presentation/widgets/x.dart',
+          severity: Severity.warning,
+          message: 'Presentation may only access use cases (imported data).',
+          line: 7,
+        ),
+      ],
+    ));
+
+    expect(
+        raw,
+        contains('lib/features/a/presentation/widgets/w.dart:4 — '
+            'Presentation may only access use cases (imported domain).'));
+    expect(
+        raw,
+        contains('lib/features/b/presentation/widgets/x.dart:7 — '
+            'Presentation may only access use cases (imported data).'));
+    expect(raw, contains('2 items found.'));
+  });
+
   test('text findings omit the location suffix when the line is unknown',
       () async {
     final raw = await renderText(AnalysisResult(

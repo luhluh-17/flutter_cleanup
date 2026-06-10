@@ -132,24 +132,57 @@ class ReportPrinter {
     required String itemNoun,
   }) {
     _logger.heading(title);
+
+    // Identical issues (same rule + message + severity) are grouped so a rule
+    // firing on many lines reads as one issue with a location list, not a wall
+    // of repeats. Groups are ordered by rule code then message; locations by
+    // path then line. A single-occurrence group keeps the classic
+    // `path:line — message` line.
+    final groups = <Finding, List<Finding>>{};
     for (final finding in result.findings) {
-      // `path:line[:column]` — the same convention as dart analyze, so the
-      // offending line is actionable straight from the terminal.
-      final location = finding.line == null
-          ? finding.path
-          : '${finding.path}:${finding.line}'
-              '${finding.column == null ? '' : ':${finding.column}'}';
-      final line = '$location — ${finding.message}';
-      switch (finding.severity) {
+      final group = groups.keys.firstWhere(
+        (g) =>
+            g.rule == finding.rule &&
+            g.message == finding.message &&
+            g.severity == finding.severity,
+        orElse: () => finding,
+      );
+      groups.putIfAbsent(group, () => []).add(finding);
+    }
+    final sortedGroups = groups.entries.toList()
+      ..sort((a, b) {
+        final byRule = a.key.rule.compareTo(b.key.rule);
+        if (byRule != 0) return byRule;
+        return a.key.message.compareTo(b.key.message);
+      });
+
+    for (final entry in sortedGroups) {
+      final findings = entry.value
+        ..sort((a, b) {
+          final byPath = a.path.compareTo(b.path);
+          if (byPath != 0) return byPath;
+          return (a.line ?? 0).compareTo(b.line ?? 0);
+        });
+      final first = findings.first;
+
+      final headline = findings.length == 1
+          ? '${_location(first)} — ${first.message}'
+          : '${first.message} (${findings.length} occurrences)';
+      switch (first.severity) {
         case Severity.info:
-          _logger.info(line);
+          _logger.info(headline);
         case Severity.warning:
-          _logger.warn(line);
+          _logger.warn(headline);
         case Severity.error:
-          _logger.error(line);
+          _logger.error(headline);
       }
-      if (finding.recommendation != null) {
-        _logger.plain('    ↳ ${finding.recommendation}');
+      if (findings.length > 1) {
+        for (final finding in findings) {
+          _logger.plain('    ${_location(finding)}');
+        }
+      }
+      if (first.recommendation != null) {
+        _logger.plain('    ↳ ${first.recommendation}');
       }
     }
     _logger.blank();
@@ -159,9 +192,20 @@ class ReportPrinter {
     if (count == 0) {
       _logger.success('No $plural found.');
     } else {
-      _logger.warn('$count ${count == 1 ? itemNoun : plural} found.');
+      final groupCount = sortedGroups.length;
+      final distinct = groupCount < count
+          ? ' ($groupCount distinct issue${groupCount == 1 ? '' : 's'})'
+          : '';
+      _logger.warn('$count ${count == 1 ? itemNoun : plural} found$distinct.');
     }
   }
+
+  /// `path:line[:column]` — the same convention as dart analyze, so the
+  /// offending line is actionable straight from the terminal.
+  static String _location(Finding finding) => finding.line == null
+      ? finding.path
+      : '${finding.path}:${finding.line}'
+          '${finding.column == null ? '' : ':${finding.column}'}';
 
   void _validationReportText(ValidationReport report) {
     _logger.heading('Project validation');
