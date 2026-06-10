@@ -4,6 +4,7 @@ import '../analysis/analysis_result.dart';
 import '../models/finding.dart';
 import '../models/output_format.dart';
 import '../models/validation_result.dart';
+import '../services/directory_tree_builder.dart';
 import '../services/logger.dart';
 
 /// Renders command results to the terminal in a chosen [OutputFormat].
@@ -84,6 +85,43 @@ class ReportPrinter {
         _logger.plain(_encoder.convert({
           'schemaVersion': _schemaVersion,
           'results': [for (final r in results) r.toJson()],
+        }));
+    }
+  }
+
+  /// Renders a directory tree rooted at [root].
+  ///
+  /// Text mode prints ASCII-art lines (see [renderAsciiTree]); JSON mode emits
+  /// a `{schemaVersion, root, children}` document where `root` is the
+  /// project-relative POSIX path of the tree root.
+  void tree(DirectoryTreeNode root) {
+    switch (format) {
+      case OutputFormat.text:
+        for (final line in renderAsciiTree(root)) {
+          _logger.plain(line);
+        }
+      case OutputFormat.json:
+        _logger.plain(_encoder.convert({
+          'schemaVersion': _schemaVersion,
+          'root': root.name,
+          'children': [for (final child in root.children) child.toJson()],
+        }));
+    }
+  }
+
+  /// Renders a standalone error [message].
+  ///
+  /// Text mode prints a red error line; JSON mode emits the same
+  /// `{ "error": { "message": ... } }` document shape as a failed
+  /// [validationReport], so consumers handle one error contract.
+  void error(String message) {
+    switch (format) {
+      case OutputFormat.text:
+        _logger.error(message);
+      case OutputFormat.json:
+        _logger.plain(_encoder.convert({
+          'schemaVersion': _schemaVersion,
+          'error': {'message': message},
         }));
     }
   }
