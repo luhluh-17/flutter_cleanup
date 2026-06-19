@@ -64,9 +64,11 @@ class CleanArchitectureDefinition implements ArchitectureDefinition {
     // Dependencies flow inward toward domain.
     switch (from) {
       case Layer.presentation:
-        return to == Layer.domain; // not data
+        return to == Layer.application || to == Layer.domain; // not data
+      case Layer.application:
+        return to == Layer.domain; // not presentation or data
       case Layer.data:
-        return to == Layer.domain; // not presentation
+        return to == Layer.domain; // not presentation or application
       case Layer.domain:
         return false; // domain depends on nothing outward
       case Layer.core:

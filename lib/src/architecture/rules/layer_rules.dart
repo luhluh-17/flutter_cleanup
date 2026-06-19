@@ -103,14 +103,26 @@ class LayerImportRule implements ArchitectureRule {
         }
         final allowed = tgt.isCore ||
             tgt.layer == Layer.presentation ||
+            tgt.layer == Layer.application ||
             tgt.isUseCase ||
             tgt.isEntity;
         if (!allowed && tgt.layer.isFeatureLayer) {
           return make(
               'ARCH105',
               Severity.warning,
-              'Presentation may only access use cases, entities, and providers '
-              '(imported ${layerLabel(tgt)}).');
+              'Presentation may only access application services, use cases, '
+              'entities, and providers (imported ${layerLabel(tgt)}).');
+        }
+        return null;
+      case Layer.application:
+        if (tgt.layer == Layer.data) {
+          return make('ARCH106', Severity.error,
+              'Illegal layer dependency: application must not import data.');
+        }
+        if (tgt.layer == Layer.presentation) {
+          return make('ARCH106', Severity.error,
+              'Illegal layer dependency: application must not import '
+              'presentation.');
         }
         return null;
       case Layer.domain:
@@ -122,12 +134,20 @@ class LayerImportRule implements ArchitectureRule {
           return make('ARCH106', Severity.error,
               'Illegal layer dependency: domain must not import data.');
         }
+        if (tgt.layer == Layer.application) {
+          return make('ARCH106', Severity.error,
+              'Illegal layer dependency: domain must not import application.');
+        }
         if (tgt.layer == Layer.presentation) {
           return make('ARCH106', Severity.error,
               'Illegal layer dependency: domain must not import presentation.');
         }
         return null;
       case Layer.data:
+        if (tgt.layer == Layer.application) {
+          return make('ARCH106', Severity.error,
+              'Illegal layer dependency: data must not import application.');
+        }
         if (tgt.layer == Layer.presentation) {
           return make('ARCH106', Severity.error,
               'Illegal layer dependency: data must not import presentation.');

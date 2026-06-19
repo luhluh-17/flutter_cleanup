@@ -20,6 +20,7 @@ class LayerClassifier {
   static const _layerByDir = {
     'data': Layer.data,
     'domain': Layer.domain,
+    'application': Layer.application,
     'presentation': Layer.presentation,
   };
 
@@ -29,6 +30,9 @@ class LayerClassifier {
     'repositories': Sublayer.repositories,
     'entities': Sublayer.entities,
     'usecases': Sublayer.usecases,
+    'services': Sublayer.services,
+    'coordinators': Sublayer.coordinators,
+    'facades': Sublayer.facades,
     'providers': Sublayer.providers,
     'pages': Sublayer.pages,
     'widgets': Sublayer.widgets,

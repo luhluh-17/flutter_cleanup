@@ -110,11 +110,12 @@ class ElementPlacementRule implements ArchitectureRule {
 /// invisible blind spot; with it, every blind spot is reported:
 ///
 /// - **ARCH210** — a folder directly under a feature that is not `data/`,
-///   `domain/`, or `presentation/` (e.g. `application/`, `infrastructure/`,
+///   `domain/`, `application/`, or `presentation/` (e.g. `infrastructure/`,
 ///   `state/`), or a loose `.dart` file directly under the feature root.
 /// - **ARCH211** — a sub-folder directly under a layer that is not in that
 ///   layer's vocabulary (`data/{datasources,models,repositories}`,
 ///   `domain/{entities,repositories,usecases}`,
+///   `application/{services,coordinators,facades}`,
 ///   `presentation/{pages,providers,widgets}`). Deeper organizational folders
 ///   under a recognized sub-folder (e.g. `presentation/widgets/fields/`) are
 ///   allowed, as are loose files directly under a layer.
@@ -129,11 +130,12 @@ class ElementPlacementRule implements ArchitectureRule {
 class StructureVocabularyRule implements ArchitectureRule {
   const StructureVocabularyRule();
 
-  static const _layerDirs = {'data', 'domain', 'presentation'};
+  static const _layerDirs = {'data', 'domain', 'application', 'presentation'};
 
   static const _sublayerDirsByLayer = {
     'data': {'datasources', 'models', 'repositories'},
     'domain': {'entities', 'repositories', 'usecases'},
+    'application': {'services', 'coordinators', 'facades'},
     'presentation': {'pages', 'providers', 'widgets'},
   };
 

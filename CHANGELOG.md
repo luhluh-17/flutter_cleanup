@@ -1,5 +1,12 @@
 ## Unreleased
 
+- `architecture`: recognize a fourth feature layer, `application/`
+  (`services`/`coordinators`/`facades`), matching the 4-layer Clean Architecture
+  model (Presentation → Application → Domain ← Data). Presentation may now import
+  the application layer; application may import only domain. `application/` is
+  optional per feature (not required by ARCH201–203) and is no longer flagged as
+  an unrecognized folder (ARCH210). Its sub-folder vocabulary is enforced by
+  ARCH211.
 - `architecture`: new analyzer/command detecting Clean Architecture +
   Feature-Based + Riverpod violations (ARCH101–503) from the Dart AST. Builds an
   import/dependency graph, classifies each file's layer, and runs a categorized

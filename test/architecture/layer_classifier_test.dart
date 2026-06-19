@@ -34,6 +34,27 @@ void main() {
     expect(info.layer, Layer.data);
   });
 
+  test('classifies feature application/services', () {
+    final info = classifier
+        .classify('lib/features/auth/application/services/auth_service.dart');
+    expect(info.layer, Layer.application);
+    expect(info.sublayer, Sublayer.services);
+    expect(info.feature, 'auth');
+  });
+
+  test('classifies application coordinators and facades', () {
+    expect(
+      classifier
+          .classify('lib/features/a/application/coordinators/c.dart')
+          .sublayer,
+      Sublayer.coordinators,
+    );
+    expect(
+      classifier.classify('lib/features/a/application/facades/f.dart').sublayer,
+      Sublayer.facades,
+    );
+  });
+
   test('classifies presentation pages and providers', () {
     expect(
       classifier.classify('lib/features/a/presentation/pages/x.dart').isPage,

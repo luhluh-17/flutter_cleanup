@@ -40,9 +40,11 @@ class ArchitectureContext {
   /// The internal import dependency graph (file- and feature-level).
   final DependencyGraph graph;
 
-  /// feature → the set of layer folders (`data`/`domain`/`presentation`) that
-  /// physically exist for that feature. Drives the completeness rules (ARCH201–
-  /// 203), which must see a *missing* folder even when no file references it.
+  /// feature → the set of feature layer folders (`data`/`domain`/`application`/
+  /// `presentation`) that physically exist for that feature. Drives the
+  /// completeness rules (ARCH201–203), which must see a *missing* folder even
+  /// when no file references it. (`application` is recorded but optional, so it
+  /// is never reported as missing.)
   final Map<String, Set<Layer>> featureLayerDirs;
 
   /// All discovered feature names.
@@ -127,11 +129,13 @@ class ArchitectureContext {
     return null;
   }
 
-  /// Records which of `data`/`domain`/`presentation` exist on disk per feature.
+  /// Records which of `data`/`domain`/`application`/`presentation` exist on disk
+  /// per feature.
   static Map<String, Set<Layer>> _scanFeatureLayerDirs(String libDir) {
     const layerByDir = {
       'data': Layer.data,
       'domain': Layer.domain,
+      'application': Layer.application,
       'presentation': Layer.presentation,
     };
     final result = <String, Set<Layer>>{};

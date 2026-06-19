@@ -5,18 +5,27 @@ void main() {
   const def = CleanArchitectureDefinition();
 
   group('canImport matrix', () {
-    test('presentation may import domain, not data', () {
+    test('presentation may import application and domain, not data', () {
+      expect(def.canImport(Layer.presentation, Layer.application), isTrue);
       expect(def.canImport(Layer.presentation, Layer.domain), isTrue);
       expect(def.canImport(Layer.presentation, Layer.data), isFalse);
     });
 
-    test('data may import domain, not presentation', () {
+    test('application may import domain, not data or presentation', () {
+      expect(def.canImport(Layer.application, Layer.domain), isTrue);
+      expect(def.canImport(Layer.application, Layer.data), isFalse);
+      expect(def.canImport(Layer.application, Layer.presentation), isFalse);
+    });
+
+    test('data may import domain, not application or presentation', () {
       expect(def.canImport(Layer.data, Layer.domain), isTrue);
+      expect(def.canImport(Layer.data, Layer.application), isFalse);
       expect(def.canImport(Layer.data, Layer.presentation), isFalse);
     });
 
     test('domain may import nothing outward', () {
       expect(def.canImport(Layer.domain, Layer.data), isFalse);
+      expect(def.canImport(Layer.domain, Layer.application), isFalse);
       expect(def.canImport(Layer.domain, Layer.presentation), isFalse);
     });
 

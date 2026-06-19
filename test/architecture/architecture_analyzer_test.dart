@@ -54,8 +54,12 @@ void main() {
             'abstract class UserRepository {}\n',
         'lib/features/auth/domain/usecases/login.dart':
             'class LoginUseCase {}\n',
+        'lib/features/auth/application/services/auth_service.dart':
+            "import '../../domain/usecases/login.dart';\n"
+                'class AuthService {}\n',
         'lib/features/auth/presentation/pages/login_page.dart':
-            'class LoginPage {}\n',
+            "import '../../application/services/auth_service.dart';\n"
+                'class LoginPage {}\n',
         'lib/features/auth/presentation/providers/auth_provider.dart':
             'class AuthState {}\n',
         'lib/features/auth/presentation/widgets/button.dart':
@@ -99,6 +103,29 @@ void main() {
             'class AuthRemoteDataSource {}\n',
       });
       expect(codes(result), contains('ARCH103'));
+    });
+
+    test('ARCH106: application must not import data', () async {
+      final result = await analyze({
+        'lib/features/auth/application/services/auth_service.dart':
+            "import '../../data/datasources/auth_remote.dart';\n"
+                'class AuthService {}\n',
+        'lib/features/auth/data/datasources/auth_remote.dart':
+            'class AuthRemoteDataSource {}\n',
+      });
+      expect(codes(result), contains('ARCH106'));
+    });
+
+    test('presentation may import the application layer', () async {
+      final result = await analyze({
+        'lib/features/auth/presentation/pages/login_page.dart':
+            "import '../../application/services/auth_service.dart';\n"
+                'class LoginPage {}\n',
+        'lib/features/auth/application/services/auth_service.dart':
+            'class AuthService {}\n',
+      });
+      expect(codes(result),
+          isNot(anyOf(contains('ARCH105'), contains('ARCH106'))));
     });
 
     test('ARCH107/108: presentation must not instantiate Dio/datasources',

@@ -34,17 +34,17 @@ void main() {
   group('ARCH210 — unrecognized feature folders', () {
     test('flags a non-layer folder once, not per file', () async {
       final result = await analyze({
-        'lib/features/exec/application/runtime/runtime.dart': 'class A {}\n',
-        'lib/features/exec/application/runtime/state.dart': 'class B {}\n',
-        'lib/features/exec/application/providers/p.dart': 'class C {}\n',
+        'lib/features/exec/infrastructure/runtime/runtime.dart': 'class A {}\n',
+        'lib/features/exec/infrastructure/runtime/state.dart': 'class B {}\n',
+        'lib/features/exec/infrastructure/providers/p.dart': 'class C {}\n',
       });
 
       final findings = findingsFor(result, 'ARCH210');
       expect(findings, hasLength(1));
       expect(findings.single.message,
-          contains('lib/features/exec/application'));
+          contains('lib/features/exec/infrastructure'));
       expect(findings.single.path,
-          'lib/features/exec/application/providers/p.dart');
+          'lib/features/exec/infrastructure/providers/p.dart');
     });
 
     test('flags each unrecognized folder separately', () async {
@@ -75,6 +75,7 @@ void main() {
       final result = await analyze({
         'lib/features/auth/data/models/m_model.dart': 'class MModel {}\n',
         'lib/features/auth/domain/entities/e.dart': 'class E {}\n',
+        'lib/features/auth/application/services/s.dart': 'class S {}\n',
         'lib/features/auth/presentation/widgets/w.dart': 'class W {}\n',
       });
 
@@ -105,6 +106,42 @@ void main() {
       });
 
       expect(findingsFor(result, 'ARCH211'), hasLength(2));
+    });
+
+    test('flags an unrecognized application sub-folder', () async {
+      final result = await analyze({
+        'lib/features/exec/application/runtime/r.dart': 'class R {}\n',
+      });
+
+      final findings = findingsFor(result, 'ARCH211');
+      expect(findings, hasLength(1));
+      expect(findings.single.message,
+          contains('lib/features/exec/application/runtime'));
+      expect(findings.single.message,
+          allOf(contains('services'), contains('coordinators'),
+              contains('facades')));
+    });
+
+    test('flags vocabulary from another layer (application/providers)',
+        () async {
+      final result = await analyze({
+        'lib/features/exec/application/providers/p.dart': 'class P {}\n',
+      });
+
+      final findings = findingsFor(result, 'ARCH211');
+      expect(findings, hasLength(1));
+      expect(findings.single.message,
+          contains('"providers" is the presentation layer\'s vocabulary'));
+    });
+
+    test('allows the application vocabulary sub-folders', () async {
+      final result = await analyze({
+        'lib/features/exec/application/services/s.dart': 'class S {}\n',
+        'lib/features/exec/application/coordinators/c.dart': 'class C {}\n',
+        'lib/features/exec/application/facades/f.dart': 'class F {}\n',
+      });
+
+      expect(findingsFor(result, 'ARCH211'), isEmpty);
     });
 
     test('allows organizational folders under a recognized sub-folder',
@@ -164,6 +201,10 @@ void main() {
       'lib/features/auth/domain/repositories/user_repository.dart':
           'abstract class UserRepository {}\n',
       'lib/features/auth/domain/usecases/login.dart': 'class LoginUseCase {}\n',
+      'lib/features/auth/application/services/auth_service.dart':
+          'class AuthService {}\n',
+      'lib/features/auth/application/coordinators/auth_coordinator.dart':
+          'class AuthCoordinator {}\n',
       'lib/features/auth/presentation/pages/login_page.dart':
           'class LoginPage {}\n',
       'lib/features/auth/presentation/providers/auth_provider.dart':

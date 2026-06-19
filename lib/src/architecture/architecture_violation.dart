@@ -87,9 +87,9 @@ const Map<String, String> _recommendations = {
   'ARCH208': 'Move the entity into domain/entities/.',
   'ARCH209': 'Declare "implements <Name>Repository", creating the contract '
       'in domain/repositories if needed.',
-  'ARCH210': 'Move the folder\'s contents into data/, domain/, or '
-      'presentation/ (application logic usually fits domain/usecases or '
-      'presentation/providers; infrastructure fits data/).',
+  'ARCH210': 'Move the folder\'s contents into data/, domain/, application/, or '
+      'presentation/ (orchestration fits application/services; business rules '
+      'fit domain/usecases; infrastructure fits data/).',
   'ARCH211': 'Rename to the standard vocabulary (screens → pages, '
       'controllers/state → providers, domain models → entities) or nest it '
       'under a recognized sub-folder.',
