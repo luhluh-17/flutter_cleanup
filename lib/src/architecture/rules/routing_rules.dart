@@ -4,10 +4,10 @@ import '../architecture_violation.dart';
 import '../ast/ast_scanner.dart';
 import 'architecture_rule.dart';
 
-/// ARCH401–403 — routing must be centralized in `core/config/router`.
+/// ARCH401–403 — routing must be centralized in `lib/routing`.
 ///
-/// - 401: a routing definition (`GoRouter`/`GoRoute`) anywhere outside the
-///   router folder and outside features (e.g. `lib/app.dart`).
+/// - 401: a routing definition (`GoRouter`/`GoRoute`) anywhere outside
+///   `lib/routing` and outside features (e.g. `lib/app.dart`, `core/`).
 /// - 402: a feature instantiates its own `GoRouter`.
 /// - 403: a feature contains a route-registration file (name matches `rout…`).
 ///
@@ -49,7 +49,7 @@ class RoutingRule implements ArchitectureRule {
             line: file.lineAt(goRouterOffset),
             featureName: feature,
             message: 'Feature "$feature" must not define its own GoRouter. '
-                'Register routes in core/config/router.',
+                'Register routes in lib/routing.',
           );
         } else if (_routeFileName.hasMatch(_basename(file.relPath))) {
           yield ArchitectureViolation(
@@ -60,7 +60,7 @@ class RoutingRule implements ArchitectureRule {
             line: 1,
             featureName: feature,
             message: 'Route-registration file inside feature "$feature". '
-                'Routing should live in core/config/router.',
+                'Routing should live in lib/routing.',
           );
         }
       } else if (routingOffset != null) {
@@ -70,8 +70,7 @@ class RoutingRule implements ArchitectureRule {
           confidence: Confidence.high,
           filePath: file.relPath,
           line: file.lineAt(routingOffset),
-          message: 'Routing definitions should only exist in '
-              'core/config/router.',
+          message: 'Routing definitions should only exist in lib/routing.',
         );
       }
     }

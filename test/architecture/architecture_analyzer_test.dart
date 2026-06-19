@@ -234,6 +234,21 @@ void main() {
       });
       expect(codes(result), contains('ARCH402'));
     });
+
+    test('GoRouter in lib/routing is the blessed location', () async {
+      final result = await analyze({
+        'lib/routing/app_router.dart': 'class R { final r = GoRouter(); }\n',
+      });
+      expect(codes(result), isNot(contains('ARCH401')));
+    });
+
+    test('ARCH401: GoRouter under core/config/router is flagged', () async {
+      final result = await analyze({
+        'lib/core/config/router/app_router.dart':
+            'class R { final r = GoRouter(); }\n',
+      });
+      expect(codes(result), contains('ARCH401'));
+    });
   });
 
   group('feature boundary rules', () {

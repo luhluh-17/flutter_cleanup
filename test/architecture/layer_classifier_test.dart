@@ -74,9 +74,31 @@ void main() {
     expect(core.layer, Layer.core);
     expect(core.isRouterDir, isFalse);
 
-    final router =
-        classifier.classify('lib/core/config/router/app_router.dart');
+    final router = classifier.classify('lib/routing/app_router.dart');
+    expect(router.isCore, isTrue);
     expect(router.isRouterDir, isTrue);
+
+    // core/config/router is no longer the blessed routing home.
+    expect(
+      classifier.classify('lib/core/config/router/app_router.dart').isRouterDir,
+      isFalse,
+    );
+  });
+
+  test('classifies shared and initialization as infrastructure', () {
+    expect(classifier.classify('lib/shared/widgets/x.dart').isCore, isTrue);
+    expect(
+      classifier.classify('lib/initialization/dependency_injection/p.dart')
+          .isCore,
+      isTrue,
+    );
+  });
+
+  test('classifies data/data_sources (underscore) as datasources', () {
+    final info = classifier
+        .classify('lib/features/auth/data/data_sources/remote/r.dart');
+    expect(info.layer, Layer.data);
+    expect(info.isDatasource, isTrue);
   });
 
   test('unrecognized paths are unknown', () {

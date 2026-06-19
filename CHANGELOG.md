@@ -1,12 +1,21 @@
 ## Unreleased
 
 - `architecture`: recognize a fourth feature layer, `application/`
-  (`services`/`coordinators`/`facades`), matching the 4-layer Clean Architecture
-  model (Presentation → Application → Domain ← Data). Presentation may now import
-  the application layer; application may import only domain. `application/` is
-  optional per feature (not required by ARCH201–203) and is no longer flagged as
-  an unrecognized folder (ARCH210). Its sub-folder vocabulary is enforced by
-  ARCH211.
+  (`services`/`coordinators`/`facades`/`runtime`), matching the 4-layer Clean
+  Architecture model (Presentation → Application → Domain ← Data). Presentation
+  may now import the application layer; application may import only domain.
+  `application/` is optional per feature (not required by ARCH201–203) and is no
+  longer flagged as an unrecognized folder (ARCH210). Its sub-folder vocabulary
+  is enforced by ARCH211.
+- `architecture`: expanded the folder vocabulary to match the canonical
+  feature layout — `data/{data_sources,mappers,dto}`,
+  `domain/{value_objects,services}`, and `presentation/{controllers,dialogs}`
+  are now recognized sub-folders. `lib/shared/` and `lib/initialization/` are
+  recognized as top-level shared infrastructure (like `lib/core/`), so they no
+  longer trip ARCH212.
+- `architecture`: routing's blessed home moved from `core/config/router/` to the
+  top-level `lib/routing/` (ARCH401–403). Route definitions under
+  `core/config/router/` are now flagged instead.
 - `architecture`: new analyzer/command detecting Clean Architecture +
   Feature-Based + Riverpod violations (ARCH101–503) from the Dart AST. Builds an
   import/dependency graph, classifies each file's layer, and runs a categorized

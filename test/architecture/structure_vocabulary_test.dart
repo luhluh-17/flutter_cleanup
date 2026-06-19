@@ -102,24 +102,46 @@ void main() {
     test('flags synonyms like presentation/screens', () async {
       final result = await analyze({
         'lib/features/auth/presentation/screens/s.dart': 'class S {}\n',
-        'lib/features/auth/presentation/controllers/c.dart': 'class C {}\n',
+        'lib/features/auth/presentation/state/c.dart': 'class C {}\n',
       });
 
       expect(findingsFor(result, 'ARCH211'), hasLength(2));
     });
 
+    test('allows presentation controllers and dialogs', () async {
+      final result = await analyze({
+        'lib/features/auth/presentation/controllers/c.dart': 'class C {}\n',
+        'lib/features/auth/presentation/dialogs/d.dart': 'class D {}\n',
+      });
+
+      expect(findingsFor(result, 'ARCH211'), isEmpty);
+    });
+
+    test('allows the extended data and domain vocabulary', () async {
+      final result = await analyze({
+        'lib/features/auth/data/data_sources/local/l.dart': 'class L {}\n',
+        'lib/features/auth/data/mappers/m.dart': 'class M {}\n',
+        'lib/features/auth/data/dto/d.dart': 'class D {}\n',
+        'lib/features/auth/domain/value_objects/v.dart': 'class V {}\n',
+        'lib/features/auth/domain/services/s.dart': 'class S {}\n',
+        'lib/features/auth/application/runtime/r.dart': 'class R {}\n',
+      });
+
+      expect(findingsFor(result, 'ARCH211'), isEmpty);
+    });
+
     test('flags an unrecognized application sub-folder', () async {
       final result = await analyze({
-        'lib/features/exec/application/runtime/r.dart': 'class R {}\n',
+        'lib/features/exec/application/handlers/h.dart': 'class H {}\n',
       });
 
       final findings = findingsFor(result, 'ARCH211');
       expect(findings, hasLength(1));
       expect(findings.single.message,
-          contains('lib/features/exec/application/runtime'));
+          contains('lib/features/exec/application/handlers'));
       expect(findings.single.message,
           allOf(contains('services'), contains('coordinators'),
-              contains('facades')));
+              contains('facades'), contains('runtime')));
     });
 
     test('flags vocabulary from another layer (application/providers)',
@@ -164,23 +186,26 @@ void main() {
   });
 
   group('ARCH212 — unrecognized top-level folders', () {
-    test('flags lib folders other than core/ and features/', () async {
+    test('flags lib folders outside the recognized top-level set', () async {
       final result = await analyze({
-        'lib/routing/router.dart': 'class R {}\n',
-        'lib/initialization/init.dart': 'class I {}\n',
+        'lib/utils/helpers.dart': 'class R {}\n',
+        'lib/widgets/w.dart': 'class I {}\n',
       });
 
       expect(
         findingsFor(result, 'ARCH212').map((f) => f.message).join(' '),
-        allOf(contains('lib/routing'), contains('lib/initialization')),
+        allOf(contains('lib/utils'), contains('lib/widgets')),
       );
     });
 
-    test('allows loose files under lib/ and anything under core/', () async {
+    test('allows the recognized infrastructure top-level folders', () async {
       final result = await analyze({
         'lib/main.dart': 'void main() {}\n',
         'lib/app.dart': 'class App {}\n',
         'lib/core/theme/colors.dart': 'class AppColors {}\n',
+        'lib/shared/widgets/w.dart': 'class W {}\n',
+        'lib/initialization/dependency_injection/p.dart': 'class P {}\n',
+        'lib/routing/app_router.dart': 'class AppRouter {}\n',
       });
 
       expect(findingsFor(result, 'ARCH212'), isEmpty);

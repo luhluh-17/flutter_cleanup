@@ -309,17 +309,20 @@ dart run flutter_cleanup architecture --report      # + feature dependency tree
 | ARCH1xx | Layer dependency & purity (3) | domain imports Dio (101), entity imports model (102), presentation imports datasource (103), illegal layer direction (106), page instantiates repository (110) |
 | ARCH2xx | Structure & placement (2) | feature missing a layer (201–203), use case / model / entity in the wrong folder (204–208), repo impl with no contract (209) |
 | ARCH3xx | Riverpod (2) | notifier constructs its own dependency instead of injecting it (301) |
-| ARCH4xx | Routing (2) | routing outside `core/config/router` (401), feature defines its own `GoRouter` (402), stray route file (403) |
+| ARCH4xx | Routing (2) | routing outside `lib/routing` (401), feature defines its own `GoRouter` (402), stray route file (403) |
 | ARCH5xx | Feature boundaries (5) | cross-feature import (501), circular feature dependency (502), god-feature fan-out (503) |
 
-**Recognized layers.** Each feature is organized into four layers — `presentation/`
-(`pages`/`providers`/`widgets`), `application/` (`services`/`coordinators`/`facades`),
-`domain/` (`entities`/`repositories`/`usecases`), and `data/`
-(`datasources`/`models`/`repositories`) — plus shared `lib/core/`. Dependencies
-flow inward toward `domain`: presentation may use application and domain;
-application and data may use domain; domain depends on nothing outward. Only
-`data`, `domain`, and `presentation` are required per feature (ARCH201–203);
-`application/` is optional.
+**Recognized layers.** Each feature is organized into four layers —
+`presentation/` (`pages`/`providers`/`widgets`/`controllers`/`dialogs`),
+`application/` (`services`/`coordinators`/`facades`/`runtime`),
+`domain/` (`entities`/`repositories`/`usecases`/`value_objects`/`services`), and
+`data/` (`datasources`/`data_sources`/`models`/`mappers`/`dto`/`repositories`).
+Shared infrastructure lives at the top level in `lib/core/`, `lib/shared/`,
+`lib/initialization/`, and `lib/routing/` (the blessed home for route
+definitions). Dependencies flow inward toward `domain`: presentation may use
+application and domain; application and data may use domain; domain depends on
+nothing outward. Only `data`, `domain`, and `presentation` are required per
+feature (ARCH201–203); `application/` is optional.
 
 The **score** starts at 100 and subtracts each violation's category weight
 (feature-boundary problems cost the most), floored at 0.

@@ -91,18 +91,18 @@ const Map<String, String> _recommendations = {
       'presentation/ (orchestration fits application/services; business rules '
       'fit domain/usecases; infrastructure fits data/).',
   'ARCH211': 'Rename to the standard vocabulary (screens → pages, '
-      'controllers/state → providers, domain models → entities) or nest it '
+      'state → providers/controllers, domain models → entities) or nest it '
       'under a recognized sub-folder.',
-  'ARCH212': 'Move shared code into lib/core/ and feature code into '
-      'lib/features/<feature>/ (routing belongs in core/config/router).',
+  'ARCH212': 'Move shared code into lib/core/ (or lib/shared/) and feature code '
+      'into lib/features/<feature>/ (routing belongs in lib/routing).',
   // ARCH3xx — Riverpod
   'ARCH301': 'Inject the dependency through a provider '
       '(ref.watch/ref.read) instead of constructing it in the notifier.',
   // ARCH4xx — routing
-  'ARCH401': 'Move routing definitions into core/config/router/.',
-  'ARCH402': 'Use the central GoRouter in core/config/router and contribute '
+  'ARCH401': 'Move routing definitions into lib/routing/.',
+  'ARCH402': 'Use the central GoRouter in lib/routing and contribute '
       'routes there.',
-  'ARCH403': 'Move route registration into core/config/router/; features '
+  'ARCH403': 'Move route registration into lib/routing/; features '
       'should expose pages, not routes.',
   // ARCH5xx — feature boundaries
   'ARCH501': 'Extract the shared code into core/, or depend on the other '

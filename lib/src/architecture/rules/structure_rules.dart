@@ -113,15 +113,18 @@ class ElementPlacementRule implements ArchitectureRule {
 ///   `domain/`, `application/`, or `presentation/` (e.g. `infrastructure/`,
 ///   `state/`), or a loose `.dart` file directly under the feature root.
 /// - **ARCH211** — a sub-folder directly under a layer that is not in that
-///   layer's vocabulary (`data/{datasources,models,repositories}`,
-///   `domain/{entities,repositories,usecases}`,
-///   `application/{services,coordinators,facades}`,
-///   `presentation/{pages,providers,widgets}`). Deeper organizational folders
+///   layer's vocabulary
+///   (`data/{datasources,data_sources,models,mappers,dto,repositories}`,
+///   `domain/{entities,repositories,usecases,value_objects,services}`,
+///   `application/{services,coordinators,facades,runtime}`,
+///   `presentation/{pages,providers,widgets,controllers,dialogs}`). Deeper
+///   organizational folders
 ///   under a recognized sub-folder (e.g. `presentation/widgets/fields/`) are
 ///   allowed, as are loose files directly under a layer.
-/// - **ARCH212** — a top-level folder under `lib/` other than `core/` and
-///   `features/` (e.g. `lib/routing/`). Loose files directly under `lib/`
-///   (`main.dart`, `app.dart`) are allowed.
+/// - **ARCH212** — a top-level folder under `lib/` other than `core/`,
+///   `features/`, `shared/`, `initialization/`, or `routing/` (e.g.
+///   `lib/utils/`). Loose files directly under `lib/` (`main.dart`, `app.dart`)
+///   are allowed.
 ///
 /// Each offending folder is reported once (anchored to its first file by path),
 /// not once per file. Detection is derived from analyzed Dart file paths, so a
@@ -130,13 +133,31 @@ class ElementPlacementRule implements ArchitectureRule {
 class StructureVocabularyRule implements ArchitectureRule {
   const StructureVocabularyRule();
 
+  /// Top-level folders under `lib/` that are part of the architecture.
+  /// `core`/`shared`/`initialization`/`routing` are shared infrastructure;
+  /// `features` holds the feature layers.
+  static const _topLevelDirs = {
+    'core',
+    'features',
+    'shared',
+    'initialization',
+    'routing',
+  };
+
   static const _layerDirs = {'data', 'domain', 'application', 'presentation'};
 
   static const _sublayerDirsByLayer = {
-    'data': {'datasources', 'models', 'repositories'},
-    'domain': {'entities', 'repositories', 'usecases'},
-    'application': {'services', 'coordinators', 'facades'},
-    'presentation': {'pages', 'providers', 'widgets'},
+    'data': {
+      'datasources',
+      'data_sources',
+      'models',
+      'mappers',
+      'dto',
+      'repositories',
+    },
+    'domain': {'entities', 'repositories', 'usecases', 'value_objects', 'services'},
+    'application': {'services', 'coordinators', 'facades', 'runtime'},
+    'presentation': {'pages', 'providers', 'widgets', 'controllers', 'dialogs'},
   };
 
   /// Reverse of [_sublayerDirsByLayer]: sub-folder name → the layer whose
@@ -185,10 +206,8 @@ class StructureVocabularyRule implements ArchitectureRule {
       final segments = file.relPath.split('/');
       if (segments.length < 2 || segments.first != 'lib') continue;
 
-      // ARCH212 — lib/<dir>/** where <dir> is not core/features.
-      if (segments.length >= 3 &&
-          segments[1] != 'core' &&
-          segments[1] != 'features') {
+      // ARCH212 — lib/<dir>/** where <dir> is not a recognized top-level folder.
+      if (segments.length >= 3 && !_topLevelDirs.contains(segments[1])) {
         record(unknownTopLevel, 'lib/${segments[1]}', file.relPath);
         continue;
       }
@@ -284,8 +303,9 @@ class StructureVocabularyRule implements ArchitectureRule {
         line: 1,
         relatedFiles: [folder],
         message: 'Folder "$folder" is outside the architecture — top-level '
-            'folders must be lib/core/ or lib/features/. Files in it are not '
-            'checked by the layer rules.',
+            'folders must be lib/core/, lib/features/, lib/shared/, '
+            'lib/initialization/, or lib/routing/. Files in it are not checked '
+            'by the layer rules.',
       );
     }
   }

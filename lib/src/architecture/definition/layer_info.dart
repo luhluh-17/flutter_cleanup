@@ -31,7 +31,7 @@ class LayerInfo {
   /// Whether the file lives under `lib/core/`.
   final bool isCore;
 
-  /// Whether the file lives under `lib/core/config/router/`.
+  /// Whether the file lives under `lib/routing/` (the blessed routing home).
   final bool isRouterDir;
 
   /// `domain/repositories` — the repository *contracts* other features may share.

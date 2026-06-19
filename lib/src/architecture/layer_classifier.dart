@@ -10,12 +10,24 @@ import 'definition/layer_info.dart';
 ///
 /// Recognized shapes (paths are forward-slashed, as produced by
 /// `toPosixRelative`):
-/// - `lib/core/**` → [Layer.core]; `lib/core/config/router/**` also flags
+/// - `lib/{core,shared,initialization,routing}/**` → [Layer.core] (shared
+///   infrastructure any layer may use); `lib/routing/**` also flags
 ///   [LayerInfo.isRouterDir].
 /// - `lib/features/<feature>/<layer>/<sublayer>/**` → the feature layer/sublayer.
 /// - anything else under `lib/` (e.g. `lib/main.dart`) → [LayerInfo.unknown].
 class LayerClassifier {
   const LayerClassifier();
+
+  /// Top-level folders treated as shared infrastructure (outside the feature
+  /// layers). They behave like [Layer.core]: anything may import them and they
+  /// may import anything. `routing` is the single blessed home for route
+  /// definitions ([LayerInfo.isRouterDir]).
+  static const _infraTopLevel = {
+    'core',
+    'shared',
+    'initialization',
+    'routing',
+  };
 
   static const _layerByDir = {
     'data': Layer.data,
@@ -26,6 +38,7 @@ class LayerClassifier {
 
   static const _sublayerByDir = {
     'datasources': Sublayer.datasources,
+    'data_sources': Sublayer.datasources,
     'models': Sublayer.models,
     'repositories': Sublayer.repositories,
     'entities': Sublayer.entities,
@@ -43,16 +56,13 @@ class LayerClassifier {
     final segments = relPath.split('/').where((s) => s.isNotEmpty).toList();
     if (segments.isEmpty || segments.first != 'lib') return LayerInfo.unknown;
 
-    // lib/core/**
-    if (segments.length >= 2 && segments[1] == 'core') {
-      final isRouter = segments.length >= 4 &&
-          segments[2] == 'config' &&
-          segments[3] == 'router';
+    // lib/{core,shared,initialization,routing}/** — shared infrastructure.
+    if (segments.length >= 2 && _infraTopLevel.contains(segments[1])) {
       return LayerInfo(
         layer: Layer.core,
         sublayer: Sublayer.none,
         isCore: true,
-        isRouterDir: isRouter,
+        isRouterDir: segments[1] == 'routing',
       );
     }
 
