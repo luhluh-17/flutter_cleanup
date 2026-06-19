@@ -122,6 +122,33 @@ void main() {
       });
       expect(codes(result), contains('ARCH109'));
     });
+
+    test('ARCH109: flags serializing a typed model (obj.toJson / Model.fromJson)',
+        () async {
+      final result = await analyze({
+        'lib/features/wf/presentation/providers/wf_state.dart':
+            "import 'dart:convert';\n"
+                'String encode(Workflow w) => jsonEncode(w.toJson());\n'
+                'Workflow decode(String s) => Workflow.fromJson(jsonDecode(s));\n',
+      });
+      expect(codes(result), contains('ARCH109'));
+    });
+
+    test('ARCH109: ignores raw jsonEncode/jsonDecode of opaque payloads',
+        () async {
+      final result = await analyze({
+        'lib/features/exec/presentation/widgets/raw_tab.dart':
+            "import 'dart:convert';\n"
+                'class RawTab {\n'
+                '  String pretty(String blob) =>\n'
+                '      const JsonEncoder.withIndent("  ").convert(jsonDecode(blob));\n'
+                '  bool looksJson(String s) {\n'
+                '    try { jsonDecode(s); return true; } catch (_) { return false; }\n'
+                '  }\n'
+                '}\n',
+      });
+      expect(codes(result), isNot(contains('ARCH109')));
+    });
   });
 
   group('structure rules', () {

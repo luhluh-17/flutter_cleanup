@@ -58,10 +58,18 @@ class _InstantiationVisitor extends RecursiveAstVisitor<void> {
   }
 }
 
-/// Finds JSON-serialization usage under [root] (ARCH109).
+/// Finds *typed-model* JSON serialization under [root] (ARCH109).
 ///
-/// Reports the offset of: `jsonDecode`/`jsonEncode` calls, `fromJson` factory/
-/// named constructors, and `toJson` method declarations.
+/// The boundary this guards is "domain/DTO (de)serialization shouldn't live in
+/// the UI", so it deliberately targets only the signals of a *typed model*:
+/// - declaring a serializable model in presentation — a `toJson` method or a
+///   `fromJson` constructor declaration, or a `@JsonSerializable` annotation;
+/// - (de)serializing a typed object — a `x.toJson()` invocation or a
+///   `Type.fromJson(...)` call (e.g. `jsonEncode(workflow.toJson())`).
+///
+/// It intentionally does *not* flag bare `jsonEncode`/`jsonDecode` over opaque
+/// `String`/`Object?` payloads: pretty-printing a blob for a viewer or parsing a
+/// raw-edit field is legitimate UI work with no model to route through a mapper.
 List<int> findJsonSerialization(AstNode root) {
   final visitor = _JsonVisitor();
   root.accept(visitor);
@@ -71,11 +79,19 @@ List<int> findJsonSerialization(AstNode root) {
 class _JsonVisitor extends RecursiveAstVisitor<void> {
   final List<int> offsets = [];
 
-  static const _calls = {'jsonDecode', 'jsonEncode'};
-
   @override
   void visitMethodInvocation(MethodInvocation node) {
-    if (_calls.contains(node.methodName.name)) offsets.add(node.offset);
+    final method = node.methodName.name;
+    final target = node.target;
+    // `obj.toJson()` — serializing a typed object.
+    if (method == 'toJson' && target != null) {
+      offsets.add(node.offset);
+    } else if (method == 'fromJson' &&
+        target is SimpleIdentifier &&
+        isPascalCase(target.name)) {
+      // `Model.fromJson(...)` — deserializing into a typed model.
+      offsets.add(node.offset);
+    }
     super.visitMethodInvocation(node);
   }
 
@@ -89,5 +105,11 @@ class _JsonVisitor extends RecursiveAstVisitor<void> {
   void visitConstructorDeclaration(ConstructorDeclaration node) {
     if (node.name?.lexeme == 'fromJson') offsets.add(node.offset);
     super.visitConstructorDeclaration(node);
+  }
+
+  @override
+  void visitAnnotation(Annotation node) {
+    if (node.name.name == 'JsonSerializable') offsets.add(node.offset);
+    super.visitAnnotation(node);
   }
 }
