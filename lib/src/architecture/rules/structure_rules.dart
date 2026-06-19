@@ -137,6 +137,32 @@ class StructureVocabularyRule implements ArchitectureRule {
     'presentation': {'pages', 'providers', 'widgets'},
   };
 
+  /// Reverse of [_sublayerDirsByLayer]: sub-folder name → the layer whose
+  /// vocabulary owns it. Used to explain *why* a sub-folder is misplaced when its
+  /// name is valid but used in the wrong layer (e.g. `domain/models`). A name
+  /// shared by two layers (`repositories`) is never unrecognized in either, so it
+  /// never reaches the misplacement check and the arbitrary winner here is moot.
+  static final Map<String, String> _ownerLayerByDir = {
+    for (final entry in _sublayerDirsByLayer.entries)
+      for (final dir in entry.value) dir: entry.key,
+  };
+
+  /// A trailing clause explaining that [subName] is recognized vocabulary, just
+  /// from another layer — so naming a [layerDir] sub-folder after it is
+  /// misleading. Empty for genuine synonyms (`screens`, `controllers`) that don't
+  /// belong to any layer.
+  static String _misplacedVocabularyNote(String layerDir, String subName) {
+    final owner = _ownerLayerByDir[subName];
+    if (owner == null || owner == layerDir) return '';
+    if (layerDir == 'domain' && subName == 'models') {
+      return ' "models" is the data layer\'s vocabulary, so "domain/models" is '
+          'misleading: if these are pure domain types rename the folder to '
+          'entities/, and keep serializable DTOs in data/models/.';
+    }
+    return ' "$subName" is the $owner layer\'s vocabulary, so a $layerDir '
+        'sub-folder named "$subName" is misleading.';
+  }
+
   @override
   String get name => 'structure-vocabulary';
 
@@ -230,6 +256,7 @@ class StructureVocabularyRule implements ArchitectureRule {
     for (final folder in unknownSublayers.keys.toList()..sort()) {
       final (feature, layer, anchor) = unknownSublayers[folder]!;
       final layerDir = folder.split('/')[3];
+      final subName = folder.split('/').last;
       final allowed =
           (_sublayerDirsByLayer[layerDir]!.toList()..sort()).join('/, ');
       yield ArchitectureViolation(
@@ -242,7 +269,7 @@ class StructureVocabularyRule implements ArchitectureRule {
         layer: layer,
         relatedFiles: [folder],
         message: 'Unrecognized $layerDir sub-folder "$folder" — allowed: '
-            '$allowed/.',
+            '$allowed/.${_misplacedVocabularyNote(layerDir, subName)}',
       );
     }
 

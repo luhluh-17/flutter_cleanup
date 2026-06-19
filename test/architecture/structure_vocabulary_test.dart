@@ -93,6 +93,9 @@ void main() {
       expect(findings.single.message,
           contains('lib/features/ocr/domain/models'));
       expect(findings.single.message, contains('entities/'));
+      expect(findings.single.message, contains('misleading'));
+      expect(findings.single.message,
+          contains('"models" is the data layer\'s vocabulary'));
     });
 
     test('flags synonyms like presentation/screens', () async {
