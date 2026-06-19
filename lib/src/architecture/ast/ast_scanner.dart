@@ -58,6 +58,23 @@ class _InstantiationVisitor extends RecursiveAstVisitor<void> {
   }
 }
 
+/// A typed-model JSON serialization site found in the AST (ARCH109).
+class JsonUsage {
+  const JsonUsage(this.offset, {required this.isDeclaration});
+
+  /// AST offset of the site, for line/column lookup.
+  final int offset;
+
+  /// Whether a serializable model is *declared* here (a `toJson`/`fromJson`
+  /// member or `@JsonSerializable`) rather than *called*.
+  ///
+  /// A declaration is an unambiguous "model defined in the UI", so callers grade
+  /// it high confidence. A call (`obj.toJson()` / `Model.fromJson(...)`) is
+  /// ambiguous — a raw-JSON editor or a serialize-at-the-boundary call looks
+  /// identical from the AST — so callers grade it lower.
+  final bool isDeclaration;
+}
+
 /// Finds *typed-model* JSON serialization under [root] (ARCH109).
 ///
 /// The boundary this guards is "domain/DTO (de)serialization shouldn't live in
@@ -70,14 +87,17 @@ class _InstantiationVisitor extends RecursiveAstVisitor<void> {
 /// It intentionally does *not* flag bare `jsonEncode`/`jsonDecode` over opaque
 /// `String`/`Object?` payloads: pretty-printing a blob for a viewer or parsing a
 /// raw-edit field is legitimate UI work with no model to route through a mapper.
-List<int> findJsonSerialization(AstNode root) {
+///
+/// Each site carries [JsonUsage.isDeclaration] so the rule can grade a declared
+/// model (certain) above a serialization call (ambiguous).
+List<JsonUsage> findJsonSerialization(AstNode root) {
   final visitor = _JsonVisitor();
   root.accept(visitor);
-  return visitor.offsets;
+  return visitor.found;
 }
 
 class _JsonVisitor extends RecursiveAstVisitor<void> {
-  final List<int> offsets = [];
+  final List<JsonUsage> found = [];
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
@@ -85,31 +105,37 @@ class _JsonVisitor extends RecursiveAstVisitor<void> {
     final target = node.target;
     // `obj.toJson()` — serializing a typed object.
     if (method == 'toJson' && target != null) {
-      offsets.add(node.offset);
+      found.add(JsonUsage(node.offset, isDeclaration: false));
     } else if (method == 'fromJson' &&
         target is SimpleIdentifier &&
         isPascalCase(target.name)) {
       // `Model.fromJson(...)` — deserializing into a typed model.
-      offsets.add(node.offset);
+      found.add(JsonUsage(node.offset, isDeclaration: false));
     }
     super.visitMethodInvocation(node);
   }
 
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
-    if (node.name.lexeme == 'toJson') offsets.add(node.offset);
+    if (node.name.lexeme == 'toJson') {
+      found.add(JsonUsage(node.offset, isDeclaration: true));
+    }
     super.visitMethodDeclaration(node);
   }
 
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
-    if (node.name?.lexeme == 'fromJson') offsets.add(node.offset);
+    if (node.name?.lexeme == 'fromJson') {
+      found.add(JsonUsage(node.offset, isDeclaration: true));
+    }
     super.visitConstructorDeclaration(node);
   }
 
   @override
   void visitAnnotation(Annotation node) {
-    if (node.name.name == 'JsonSerializable') offsets.add(node.offset);
+    if (node.name.name == 'JsonSerializable') {
+      found.add(JsonUsage(node.offset, isDeclaration: true));
+    }
     super.visitAnnotation(node);
   }
 }

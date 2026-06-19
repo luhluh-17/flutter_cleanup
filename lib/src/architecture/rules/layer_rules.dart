@@ -178,8 +178,14 @@ class PresentationPurityRule implements ArchitectureRule {
         }
       }
 
-      for (final offset in findJsonSerialization(file.unit)) {
-        yield _make(file, 'ARCH109', file.lineAt(offset), Confidence.high,
+      for (final usage in findJsonSerialization(file.unit)) {
+        // Declaring a serializable model in the UI is unambiguous; a
+        // serialization *call* (`model.toJson()`) is not — a raw-JSON editor
+        // looks identical to a serialize-at-the-boundary leak — so it is graded
+        // medium.
+        final confidence =
+            usage.isDeclaration ? Confidence.high : Confidence.medium;
+        yield _make(file, 'ARCH109', file.lineAt(usage.offset), confidence,
             'Presentation layer must not contain JSON serialization code.');
       }
     }

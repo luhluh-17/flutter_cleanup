@@ -121,6 +121,9 @@ void main() {
                 '}\n',
       });
       expect(codes(result), contains('ARCH109'));
+      // Declaring a serializable model in the UI is unambiguous → high.
+      final declared = result.findings.firstWhere((f) => f.rule == 'ARCH109');
+      expect(declared.confidence, Confidence.high);
     });
 
     test('ARCH109: flags serializing a typed model (obj.toJson / Model.fromJson)',
@@ -132,6 +135,12 @@ void main() {
                 'Workflow decode(String s) => Workflow.fromJson(jsonDecode(s));\n',
       });
       expect(codes(result), contains('ARCH109'));
+      // A serialization *call* is ambiguous (raw editor vs boundary leak) → medium.
+      expect(
+        result.findings.where((f) => f.rule == 'ARCH109'),
+        everyElement(
+            isA<Finding>().having((f) => f.confidence, 'confidence', Confidence.medium)),
+      );
     });
 
     test('ARCH109: ignores raw jsonEncode/jsonDecode of opaque payloads',
