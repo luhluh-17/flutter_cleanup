@@ -6,16 +6,19 @@ import '../definition/layer.dart';
 import 'architecture_rule.dart';
 import 'rule_helpers.dart';
 
-/// ARCH201–203 — every feature must contain `data`, `domain`, and
-/// `presentation` layer folders.
+/// ARCH202 — a feature's `data` layer must be backed by a `domain` layer.
+///
+/// In this architecture every layer points inward at `domain`, so a feature is
+/// *not* required to be a full vertical slice. Most "incomplete" features are
+/// legitimate: a feature may be UI-only (its domain/data living in shared
+/// `core/`), logic-only, or a headless service with no presentation. The one
+/// shape that is genuinely broken is a `data` layer with **no** `domain` layer:
+/// the repository implementations, mappers, and DTOs there have no domain
+/// contracts or entities to satisfy, so either the domain layer was forgotten
+/// or the code belongs elsewhere. `presentation` and `data` are otherwise
+/// optional, and `application` is always optional.
 class FeatureCompletenessRule implements ArchitectureRule {
   const FeatureCompletenessRule();
-
-  static const _codes = {
-    Layer.data: ('ARCH201', 'data'),
-    Layer.domain: ('ARCH202', 'domain'),
-    Layer.presentation: ('ARCH203', 'presentation'),
-  };
 
   @override
   String get name => 'feature-completeness';
@@ -25,22 +28,23 @@ class FeatureCompletenessRule implements ArchitectureRule {
     for (final entry in context.featureLayerDirs.entries) {
       final feature = entry.key;
       final present = entry.value;
-      final anchor = context.firstFileOf(feature);
-      final filePath = anchor?.relPath ?? 'lib/features/$feature';
-
-      for (final layer in const [Layer.data, Layer.domain, Layer.presentation]) {
-        if (present.contains(layer)) continue;
-        final (code, label) = _codes[layer]!;
-        yield ArchitectureViolation(
-          code: code,
-          severity: Severity.warning,
-          confidence: Confidence.high,
-          filePath: filePath,
-          line: anchor == null ? null : 1,
-          featureName: feature,
-          message: 'Feature "$feature" is missing its "$label" layer.',
-        );
+      // Only a data layer without a domain layer is an error; every other
+      // missing-layer combination is a valid single-purpose feature.
+      if (!present.contains(Layer.data) || present.contains(Layer.domain)) {
+        continue;
       }
+      final anchor = context.firstFileOf(feature);
+      yield ArchitectureViolation(
+        code: 'ARCH202',
+        severity: Severity.warning,
+        confidence: Confidence.high,
+        filePath: anchor?.relPath ?? 'lib/features/$feature',
+        line: anchor == null ? null : 1,
+        featureName: feature,
+        message: 'Feature "$feature" has a "data" layer but no "domain" layer '
+            '— its data implementations have no domain contracts or entities '
+            'to satisfy. Add domain/, or move the data elsewhere.',
+      );
     }
   }
 }

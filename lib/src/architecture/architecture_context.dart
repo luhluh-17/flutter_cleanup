@@ -47,9 +47,9 @@ class ArchitectureContext {
 
   /// feature → the set of feature layer folders (`data`/`domain`/`application`/
   /// `presentation`) that physically exist for that feature. Drives the
-  /// completeness rules (ARCH201–203), which must see a *missing* folder even
-  /// when no file references it. (`application` is recorded but optional, so it
-  /// is never reported as missing.)
+  /// completeness rule (ARCH202), which must see whether `data`/`domain` exist
+  /// even when no file references them. (`presentation`/`application` are
+  /// recorded but optional, so they are never reported as missing.)
   final Map<String, Set<Layer>> featureLayerDirs;
 
   /// All discovered feature names.
@@ -142,7 +142,7 @@ class ArchitectureContext {
   /// layer folders directly but whose children do (e.g.
   /// `features/workflows/dashboard/...`) is a *group*, and each such child is
   /// recorded as a sub-feature keyed `"<group>/<sub>"`. The group container
-  /// itself is never recorded, so completeness (ARCH201–203) addresses the real
+  /// itself is never recorded, so completeness (ARCH202) addresses the real
   /// sub-features instead of cascading "missing layer" warnings onto the empty
   /// container.
   static Map<String, Set<Layer>> _scanFeatureLayerDirs(String libDir) {

@@ -11,7 +11,7 @@ void main() {
   const allCodes = [
     'ARCH101', 'ARCH102', 'ARCH103', 'ARCH104', 'ARCH105', // layer imports
     'ARCH106', 'ARCH107', 'ARCH108', 'ARCH109', 'ARCH110', // layer purity
-    'ARCH201', 'ARCH202', 'ARCH203', // completeness
+    'ARCH202', // completeness (data layer without a domain layer)
     'ARCH204', 'ARCH205', 'ARCH206', 'ARCH207', 'ARCH208', 'ARCH209', // placement
     'ARCH210', 'ARCH211', 'ARCH212', // vocabulary
     'ARCH301', // riverpod

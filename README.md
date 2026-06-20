@@ -307,7 +307,7 @@ dart run flutter_cleanup architecture --report      # + feature dependency tree
 | Range | Category (weight) | Examples |
 | --- | --- | --- |
 | ARCH1xx | Layer dependency & purity (3) | domain imports Dio (101), entity imports model (102), presentation imports datasource (103), illegal layer direction (106), page instantiates repository (110) |
-| ARCH2xx | Structure & placement (2) | feature missing a layer (201–203), use case / model / entity in the wrong folder (204–208), repo impl with no contract (209) |
+| ARCH2xx | Structure & placement (2) | data layer without a backing domain layer (202), use case / model / entity in the wrong folder (204–208), repo impl with no contract (209) |
 | ARCH3xx | Riverpod (2) | notifier constructs its own dependency instead of injecting it (301) |
 | ARCH4xx | Routing (2) | routing outside `lib/routing` (401), feature defines its own `GoRouter` (402), stray route file (403) |
 | ARCH5xx | Feature boundaries (5) | cross-feature import (501), circular feature dependency (502), god-feature fan-out (503) |
@@ -321,8 +321,12 @@ Shared infrastructure lives at the top level in `lib/core/`, `lib/shared/`,
 `lib/initialization/`, and `lib/routing/` (the blessed home for route
 definitions). Dependencies flow inward toward `domain`: presentation may use
 application and domain; application and data may use domain; domain depends on
-nothing outward. Only `data`, `domain`, and `presentation` are required per
-feature (ARCH201–203); `application/` is optional.
+nothing outward. A feature need **not** be a full vertical slice: it may be
+UI-only (its domain/data shared in `core/`), logic-only, or a headless service
+with no presentation. Because every layer points inward at `domain`, the only
+incompleteness that is actually broken — and the only one flagged (ARCH202) — is
+a `data/` layer with no `domain/` layer to back it. `presentation`, `data`, and
+`application` are all optional.
 
 **Feature groups (nested features).** Features may be grouped one level deep: a
 directory under `lib/features/` that holds no layer folders directly but whose

@@ -1,5 +1,12 @@
 ## Unreleased
 
+- `architecture`: feature-completeness is no longer a full-vertical-slice check.
+  Because every layer points inward at `domain`, a feature may legitimately be
+  UI-only (domain/data shared in `core/`), logic-only, or a headless service —
+  so missing `presentation`/`data` no longer warns. The only flagged
+  incompleteness is now a `data/` layer with no `domain/` layer to back it
+  (ARCH202); the former ARCH201 (missing data) and ARCH203 (missing
+  presentation) are retired.
 - `architecture`: support **feature groups** — one level of feature nesting under
   `lib/features/`. A directory that holds no layer folders directly but whose
   children do (e.g. `features/workflows/dashboard/{data,domain,presentation}/…`)

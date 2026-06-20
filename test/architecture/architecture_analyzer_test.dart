@@ -188,15 +188,30 @@ void main() {
   });
 
   group('structure rules', () {
-    test('ARCH201/202/203: a feature missing layers is reported', () async {
+    test('ARCH202: a data layer without a domain layer is reported', () async {
       final result = await analyze({
-        'lib/features/auth/domain/entities/user.dart': 'class User {}\n',
+        'lib/features/auth/data/datasources/auth_remote.dart':
+            'class AuthRemoteDataSource {}\n',
       });
-      expect(codes(result), containsAll(['ARCH201', 'ARCH203']));
-      expect(codes(result), isNot(contains('ARCH202')));
+      expect(codes(result), contains('ARCH202'));
     });
 
-    test('ARCH201-203: completeness addresses sub-features, not the group',
+    test('single-purpose features are not flagged as incomplete', () async {
+      // UI-only (domain/data in core) and logic+UI without persistence are both
+      // valid — only a data layer without a domain layer is an error.
+      final result = await analyze({
+        'lib/features/dashboard/presentation/pages/home.dart': 'class Home {}\n',
+        'lib/features/calc/domain/entities/sum.dart': 'class Sum {}\n',
+        'lib/features/calc/presentation/pages/calc.dart': 'class Calc {}\n',
+      });
+      expect(
+        result.findings.where((f) =>
+            f.rule == 'ARCH201' || f.rule == 'ARCH202' || f.rule == 'ARCH203'),
+        isEmpty,
+      );
+    });
+
+    test('ARCH202: completeness addresses sub-features, not the group',
         () async {
       final result = await analyze({
         'lib/features/workflows/dashboard/data/repositories/r.dart':
@@ -215,16 +230,15 @@ void main() {
       expect(completeness, isEmpty);
     });
 
-    test('ARCH201-203: an incomplete sub-feature is reported by its own name',
+    test('ARCH202: an incomplete sub-feature is reported by its own name',
         () async {
       final result = await analyze({
-        'lib/features/workflows/dashboard/presentation/screen.dart':
-            'class Screen {}\n',
+        // data layer but no domain — reported against "workflows/dashboard",
+        // not the bare group "workflows".
+        'lib/features/workflows/dashboard/data/models/m.dart': 'class M {}\n',
       });
 
-      // dashboard has only presentation, so data/domain are flagged — against
-      // "workflows/dashboard", not the bare group "workflows".
-      final missing = result.findings.where((f) => f.rule == 'ARCH201').toList();
+      final missing = result.findings.where((f) => f.rule == 'ARCH202').toList();
       expect(missing, hasLength(1));
       expect(missing.single.message, contains('workflows/dashboard'));
     });

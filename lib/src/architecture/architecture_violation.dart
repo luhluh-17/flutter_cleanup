@@ -72,12 +72,9 @@ const Map<String, String> _recommendations = {
   'ARCH110': 'Obtain the repository from a Riverpod provider '
       '(ref.read/ref.watch) instead of constructing it.',
   // ARCH2xx — structure & element placement
-  'ARCH201': 'Create the missing data/ layer and move persistence/API code '
-      'there; a feature without one may belong in core/ or another feature.',
-  'ARCH202': 'Create the missing domain/ layer (entities, repositories, '
-      'usecases) to hold the feature\'s business rules.',
-  'ARCH203': 'Create the missing presentation/ layer (pages, providers, '
-      'widgets); a feature without UI may belong in core/.',
+  'ARCH202': 'Add the domain/ layer (entities, repositories, usecases) the '
+      'data layer implements, or move the data code elsewhere — presentation '
+      'and data are optional, but a data layer needs a domain to back it.',
   'ARCH204': 'Move the use case into domain/usecases/.',
   'ARCH205': 'Move the abstract repository into domain/repositories/ so '
       'other layers can depend on the contract.',
