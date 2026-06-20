@@ -324,6 +324,17 @@ application and domain; application and data may use domain; domain depends on
 nothing outward. Only `data`, `domain`, and `presentation` are required per
 feature (ARCH201–203); `application/` is optional.
 
+**Feature groups (nested features).** Features may be grouped one level deep: a
+directory under `lib/features/` that holds no layer folders directly but whose
+children are themselves features (e.g.
+`features/workflows/dashboard/{data,domain,presentation}/…`) is a *group*, and
+each child is a sub-feature identified as `"<group>/<sub>"`. Completeness,
+placement, and cross-feature rules address the real sub-features, not the empty
+group container — so a group is never mis-reported as an unrecognized folder or
+as a feature missing all its layers. Flat features are unchanged: a layer folder
+at the first level always wins, so `features/auth/data/…` stays the flat feature
+`auth`.
+
 **Extending the vocabulary.** The folder vocabulary is strict by design (so stray
 folders can't silently escape the layer rules), but real projects grow folders
 the canonical layout doesn't name. Rather than fork the tool, *add* to the

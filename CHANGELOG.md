@@ -1,5 +1,15 @@
 ## Unreleased
 
+- `architecture`: support **feature groups** — one level of feature nesting under
+  `lib/features/`. A directory that holds no layer folders directly but whose
+  children do (e.g. `features/workflows/dashboard/{data,domain,presentation}/…`)
+  is treated as a group, and each child is a sub-feature identified as
+  `"<group>/<sub>"`. The group container is no longer mis-flagged as an
+  unrecognized folder (ARCH210) or as a feature missing all its layers
+  (ARCH201–203); completeness, placement, and cross-feature rules now address the
+  real sub-features instead. Flat features are unchanged: a layer folder at the
+  first level still wins, so `features/auth/data/…` stays the flat feature
+  `auth`.
 - `architecture`: recognize a fourth feature layer, `application/`
   (`services`/`coordinators`/`facades`/`runtime`), matching the 4-layer Clean
   Architecture model (Presentation → Application → Domain ← Data). Presentation

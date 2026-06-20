@@ -223,6 +223,16 @@ class StructureVocabularyRule implements ArchitectureRule {
     final ownerLayerByDir = _ownerLayerByDir(sublayerDirsByLayer);
     final topLevelDirs = {..._topLevelDirs, ...context.config.extraTopLevelDirs};
 
+    // Feature groups: a directory under features/ that holds sub-features rather
+    // than layer folders directly (e.g. features/workflows/dashboard/...). Their
+    // layer folders sit one level deeper, so a grouped path must not flag the
+    // sub-feature dir as an unrecognized layer folder. Derived from the
+    // completeness scan, whose grouped keys are "<group>/<sub>".
+    final groups = {
+      for (final f in context.featureLayerDirs.keys)
+        if (f.contains('/')) f.split('/').first,
+    };
+
     // folder path → first (lowest-sorted) file inside it, for stable anchors.
     final unknownTopLevel = <String, String>{};
     final unknownLayerDirs = <String, (String, String)>{}; // path → (feature, anchor)
@@ -245,34 +255,45 @@ class StructureVocabularyRule implements ArchitectureRule {
       }
       if (segments[1] != 'features') continue;
 
-      // ARCH210 — loose file directly under the feature root.
-      if (segments.length == 4) {
-        looseFeatureFiles.add((segments[2], file.relPath));
+      // A grouped feature's layer folder is nested one level deeper, so the
+      // layer dir sits at index 4 (features/<group>/<sub>/<layer>/…) instead of
+      // index 3 (features/<feature>/<layer>/…).
+      final isGroup = groups.contains(segments[2]);
+      final layerIdx = isGroup ? 4 : 3;
+
+      // ARCH210 — a loose file above any layer folder. For a flat feature that
+      // is features/<f>/x.dart; for a group it is features/<g>/x.dart or
+      // features/<g>/<sub>/x.dart. The deepest folder owns the file.
+      if (segments.length <= layerIdx + 1) {
+        final owner = segments.sublist(2, segments.length - 1).join('/');
+        looseFeatureFiles.add((owner, file.relPath));
         continue;
       }
-      if (segments.length < 5) continue;
 
-      final feature = segments[2];
-      final layerDir = segments[3];
+      final ownerFeature =
+          isGroup ? '${segments[2]}/${segments[3]}' : segments[2];
+      final ownerPath = 'lib/features/$ownerFeature';
+      final layerDir = segments[layerIdx];
+      final subIdx = layerIdx + 1;
 
-      // ARCH210 — unrecognized layer folder under a feature.
+      // ARCH210 — unrecognized layer folder under a (sub-)feature.
       if (!_layerDirs.contains(layerDir)) {
-        final folder = 'lib/features/$feature/$layerDir';
+        final folder = '$ownerPath/$layerDir';
         final current = unknownLayerDirs[folder];
         if (current == null || file.relPath.compareTo(current.$2) < 0) {
-          unknownLayerDirs[folder] = (feature, file.relPath);
+          unknownLayerDirs[folder] = (ownerFeature, file.relPath);
         }
         continue;
       }
 
       // ARCH211 — unrecognized sub-folder directly under a layer.
-      if (segments.length >= 6 &&
-          !sublayerDirsByLayer[layerDir]!.contains(segments[4])) {
-        final folder = 'lib/features/$feature/$layerDir/${segments[4]}';
+      if (segments.length >= subIdx + 2 &&
+          !sublayerDirsByLayer[layerDir]!.contains(segments[subIdx])) {
+        final folder = '$ownerPath/$layerDir/${segments[subIdx]}';
         final current = unknownSublayers[folder];
         if (current == null || file.relPath.compareTo(current.$3) < 0) {
           unknownSublayers[folder] =
-              (feature, file.layer.layer, file.relPath);
+              (ownerFeature, file.layer.layer, file.relPath);
         }
       }
     }
@@ -308,8 +329,11 @@ class StructureVocabularyRule implements ArchitectureRule {
 
     for (final folder in unknownSublayers.keys.toList()..sort()) {
       final (feature, layer, anchor) = unknownSublayers[folder]!;
-      final layerDir = folder.split('/')[3];
-      final subName = folder.split('/').last;
+      // folder is `…/<layerDir>/<subName>`; the layer dir is the second-to-last
+      // segment for both flat and grouped (one-level-deeper) feature paths.
+      final parts = folder.split('/');
+      final layerDir = parts[parts.length - 2];
+      final subName = parts.last;
       final allowed =
           (sublayerDirsByLayer[layerDir]!.toList()..sort()).join('/, ');
       yield ArchitectureViolation(

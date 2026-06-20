@@ -83,6 +83,50 @@ void main() {
     });
   });
 
+  group('ARCH210 — feature groups (nested features)', () {
+    test('does not flag the sub-feature container of a group', () async {
+      final result = await analyze({
+        'lib/features/workflows/dashboard/presentation/screen.dart':
+            'class Screen {}\n',
+        'lib/features/workflows/dashboard/domain/entities/e.dart':
+            'class E {}\n',
+        'lib/features/workflows/list/presentation/list.dart': 'class L {}\n',
+      });
+
+      expect(findingsFor(result, 'ARCH210'), isEmpty);
+    });
+
+    test('still flags a stray folder inside a grouped sub-feature', () async {
+      final result = await analyze({
+        // dashboard is a recognized sub-feature (has presentation/)…
+        'lib/features/workflows/dashboard/presentation/screen.dart':
+            'class Screen {}\n',
+        // …but providers/ here belongs under presentation/, not the sub-feature.
+        'lib/features/workflows/dashboard/providers/p.dart': 'class P {}\n',
+      });
+
+      final findings = findingsFor(result, 'ARCH210');
+      expect(findings, hasLength(1));
+      expect(findings.single.message,
+          contains('lib/features/workflows/dashboard/providers'));
+    });
+
+    test('flags an unrecognized sub-folder inside a grouped layer (ARCH211)',
+        () async {
+      final result = await analyze({
+        'lib/features/workflows/dashboard/presentation/screen.dart':
+            'class Screen {}\n',
+        'lib/features/workflows/dashboard/presentation/screens/s.dart':
+            'class S {}\n',
+      });
+
+      final findings = findingsFor(result, 'ARCH211');
+      expect(findings, hasLength(1));
+      expect(findings.single.message,
+          contains('lib/features/workflows/dashboard/presentation/screens'));
+    });
+  });
+
   group('ARCH211 — unrecognized layer sub-folders', () {
     test('flags vocabulary from the wrong layer (domain/models)', () async {
       final result = await analyze({

@@ -137,6 +137,14 @@ class ArchitectureContext {
 
   /// Records which of `data`/`domain`/`application`/`presentation` exist on disk
   /// per feature.
+  ///
+  /// Feature groups nest one level: a directory under `features/` that holds no
+  /// layer folders directly but whose children do (e.g.
+  /// `features/workflows/dashboard/...`) is a *group*, and each such child is
+  /// recorded as a sub-feature keyed `"<group>/<sub>"`. The group container
+  /// itself is never recorded, so completeness (ARCH201–203) addresses the real
+  /// sub-features instead of cascading "missing layer" warnings onto the empty
+  /// container.
   static Map<String, Set<Layer>> _scanFeatureLayerDirs(String libDir) {
     const layerByDir = {
       'data': Layer.data,
@@ -148,16 +156,41 @@ class ArchitectureContext {
     final featuresDir = Directory(p.join(libDir, 'features'));
     if (!featuresDir.existsSync()) return result;
 
-    for (final entity in featuresDir.listSync()) {
-      if (entity is! Directory) continue;
-      final feature = p.basename(entity.path);
+    Set<Layer> layersIn(String dirPath) {
       final present = <Layer>{};
       for (final entry in layerByDir.entries) {
-        if (Directory(p.join(entity.path, entry.key)).existsSync()) {
+        if (Directory(p.join(dirPath, entry.key)).existsSync()) {
           present.add(entry.value);
         }
       }
-      result[feature] = present;
+      return present;
+    }
+
+    for (final entity in featuresDir.listSync()) {
+      if (entity is! Directory) continue;
+      final feature = p.basename(entity.path);
+      final present = layersIn(entity.path);
+      if (present.isNotEmpty) {
+        result[feature] = present; // flat feature
+        continue;
+      }
+
+      // No layer folders directly under it: treat as a group if any child is
+      // itself a feature (has layer folders); otherwise record the empty
+      // feature so a genuinely contentless folder still flags.
+      final subFeatures = <String, Set<Layer>>{};
+      for (final child in entity.listSync()) {
+        if (child is! Directory) continue;
+        final childLayers = layersIn(child.path);
+        if (childLayers.isNotEmpty) {
+          subFeatures['$feature/${p.basename(child.path)}'] = childLayers;
+        }
+      }
+      if (subFeatures.isNotEmpty) {
+        result.addAll(subFeatures);
+      } else {
+        result[feature] = present;
+      }
     }
     return result;
   }

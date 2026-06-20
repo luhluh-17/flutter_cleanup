@@ -112,4 +112,30 @@ void main() {
     expect(info.feature, 'auth');
     expect(info.layer, Layer.unknown);
   });
+
+  test('classifies a grouped sub-feature as "<group>/<sub>"', () {
+    final info = classifier.classify(
+        'lib/features/workflows/dashboard/presentation/widgets/card.dart');
+    expect(info.feature, 'workflows/dashboard');
+    expect(info.layer, Layer.presentation);
+    expect(info.sublayer, Sublayer.widgets);
+  });
+
+  test('classifies a grouped sub-feature data/repositories as an impl', () {
+    final info = classifier.classify(
+        'lib/features/workflows/dashboard/data/repositories/repo_impl.dart');
+    expect(info.feature, 'workflows/dashboard');
+    expect(info.isRepositoryImpl, isTrue);
+    expect(info.layer, Layer.data);
+  });
+
+  test('flat features still win when a layer dir sits at the first level', () {
+    // features/auth/data/... must stay the flat feature "auth", never be read
+    // as a group named "auth" with sub-feature "data".
+    final info =
+        classifier.classify('lib/features/auth/data/models/user_model.dart');
+    expect(info.feature, 'auth');
+    expect(info.layer, Layer.data);
+    expect(info.sublayer, Sublayer.models);
+  });
 }

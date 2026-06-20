@@ -66,20 +66,38 @@ class LayerClassifier {
       );
     }
 
-    // lib/features/<feature>/<layer>/<sublayer>/**
+    // Flat feature:    lib/features/<feature>/<layer>/<sublayer>/**
+    // Grouped feature: lib/features/<group>/<sub>/<layer>/<sublayer>/**
+    //
+    // A feature group nests exactly one level: the layer folder sits at index 4
+    // instead of 3. The two shapes are told apart purely by where a recognized
+    // layer dir appears, so detection stays path-only (no I/O). A grouped
+    // feature's identity is "<group>/<sub>" so diagnostics, completeness, and
+    // cross-feature rules address the sub-feature rather than the group
+    // container.
     if (segments.length >= 3 && segments[1] == 'features') {
-      final feature = segments[2];
-      final layer = segments.length >= 4 ? _layerByDir[segments[3]] : null;
-      if (layer == null) {
-        // Under a feature, but not in a recognized layer dir.
+      int? layerIdx;
+      if (segments.length >= 4 && _layerByDir.containsKey(segments[3])) {
+        layerIdx = 3;
+      } else if (segments.length >= 5 && _layerByDir.containsKey(segments[4])) {
+        layerIdx = 4;
+      }
+
+      if (layerIdx == null) {
+        // Under a feature/group but not in a recognized layer dir.
         return LayerInfo(
           layer: Layer.unknown,
           sublayer: Sublayer.none,
-          feature: feature,
+          feature: segments[2],
         );
       }
-      final sublayer = segments.length >= 5
-          ? (_sublayerByDir[segments[4]] ?? Sublayer.none)
+
+      final feature =
+          layerIdx == 3 ? segments[2] : '${segments[2]}/${segments[3]}';
+      final layer = _layerByDir[segments[layerIdx]]!;
+      final subIdx = layerIdx + 1;
+      final sublayer = segments.length > subIdx
+          ? (_sublayerByDir[segments[subIdx]] ?? Sublayer.none)
           : Sublayer.none;
       return LayerInfo(layer: layer, sublayer: sublayer, feature: feature);
     }

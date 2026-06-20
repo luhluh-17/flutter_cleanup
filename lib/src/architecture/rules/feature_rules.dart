@@ -31,7 +31,13 @@ class FeatureBoundaryRule implements ArchitectureRule {
         final target = import.targetLayer;
         final to = target?.feature;
         if (to == null || to == from) continue;
-        if (target!.isDomainContract) continue; // shareable contract
+        // A target outside the feature layers (an unrecognized/misplaced folder
+        // or a loose file) is already reported by the structure rules. Counting
+        // it as a cross-feature dependency would double-flag it and, for a
+        // misplaced file inside a feature group, would misread an intra-group
+        // import as crossing a boundary.
+        if (!target!.layer.isFeatureLayer) continue;
+        if (target.isDomainContract) continue; // shareable contract
 
         yield ArchitectureViolation(
           code: 'ARCH501',

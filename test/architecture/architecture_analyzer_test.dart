@@ -196,6 +196,39 @@ void main() {
       expect(codes(result), isNot(contains('ARCH202')));
     });
 
+    test('ARCH201-203: completeness addresses sub-features, not the group',
+        () async {
+      final result = await analyze({
+        'lib/features/workflows/dashboard/data/repositories/r.dart':
+            'class R {}\n',
+        'lib/features/workflows/dashboard/domain/entities/e.dart':
+            'class E {}\n',
+        'lib/features/workflows/dashboard/presentation/screen.dart':
+            'class Screen {}\n',
+      });
+
+      // The complete sub-feature raises no missing-layer findings, and the
+      // group container "workflows" is never itself reported as incomplete.
+      final completeness = result.findings
+          .where((f) => const {'ARCH201', 'ARCH202', 'ARCH203'}.contains(f.rule))
+          .toList();
+      expect(completeness, isEmpty);
+    });
+
+    test('ARCH201-203: an incomplete sub-feature is reported by its own name',
+        () async {
+      final result = await analyze({
+        'lib/features/workflows/dashboard/presentation/screen.dart':
+            'class Screen {}\n',
+      });
+
+      // dashboard has only presentation, so data/domain are flagged — against
+      // "workflows/dashboard", not the bare group "workflows".
+      final missing = result.findings.where((f) => f.rule == 'ARCH201').toList();
+      expect(missing, hasLength(1));
+      expect(missing.single.message, contains('workflows/dashboard'));
+    });
+
     test('ARCH206: a repository impl outside data/repositories', () async {
       final result = await analyze({
         'lib/features/auth/domain/repositories/user_repository.dart':
@@ -271,6 +304,21 @@ void main() {
           result.violations.firstWhere((v) => v.code == 'ARCH502');
       expect(cycle.cyclePath.first, cycle.cyclePath.last);
       expect(cycle.cyclePath.toSet(), {'auth', 'profile'});
+    });
+
+    test('ARCH501: importing a misplaced (non-layer) file is not cross-feature',
+        () async {
+      // The screen and the providers file are both in the "dashboard"
+      // sub-feature; providers/ is just misplaced (flagged by ARCH210). The
+      // intra-group import must not be read as crossing a feature boundary.
+      final result = await analyze({
+        'lib/features/workflows/dashboard/presentation/screen.dart':
+            "import 'package:demo/features/workflows/dashboard/providers/p.dart';\n"
+                'class Screen {}\n',
+        'lib/features/workflows/dashboard/providers/p.dart': 'class P {}\n',
+      });
+
+      expect(codes(result), isNot(contains('ARCH501')));
     });
 
     test('ARCH503: a feature with too much fan-out', () async {
