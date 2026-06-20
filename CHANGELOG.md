@@ -16,6 +16,11 @@
 - `architecture`: routing's blessed home moved from `core/config/router/` to the
   top-level `lib/routing/` (ARCH401–403). Route definitions under
   `core/config/router/` are now flagged instead.
+- `architecture`: `presentation/painters/` is now built-in vocabulary, and the
+  folder vocabulary is extensible via a new `architecture:` section in
+  `.flutter_cleanup.yaml` (`sublayers:` per layer and `top_level:`). Extras are
+  additive and only relax the structure warnings (ARCH210–212); the layer/purity
+  rules still apply.
 - `architecture`: new analyzer/command detecting Clean Architecture +
   Feature-Based + Riverpod violations (ARCH101–503) from the Dart AST. Builds an
   import/dependency graph, classifies each file's layer, and runs a categorized

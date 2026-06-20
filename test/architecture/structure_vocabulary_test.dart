@@ -108,10 +108,11 @@ void main() {
       expect(findingsFor(result, 'ARCH211'), hasLength(2));
     });
 
-    test('allows presentation controllers and dialogs', () async {
+    test('allows presentation controllers, dialogs, and painters', () async {
       final result = await analyze({
         'lib/features/auth/presentation/controllers/c.dart': 'class C {}\n',
         'lib/features/auth/presentation/dialogs/d.dart': 'class D {}\n',
+        'lib/features/auth/presentation/painters/p.dart': 'class P {}\n',
       });
 
       expect(findingsFor(result, 'ARCH211'), isEmpty);
@@ -206,6 +207,44 @@ void main() {
         'lib/shared/widgets/w.dart': 'class W {}\n',
         'lib/initialization/dependency_injection/p.dart': 'class P {}\n',
         'lib/routing/app_router.dart': 'class AppRouter {}\n',
+      });
+
+      expect(findingsFor(result, 'ARCH212'), isEmpty);
+    });
+  });
+
+  group('project config extends the vocabulary', () {
+    test('allows an extra presentation sub-folder declared in config',
+        () async {
+      final result = await analyze({
+        '.flutter_cleanup.yaml':
+            'architecture:\n  sublayers:\n    presentation: [styles]\n',
+        'lib/features/auth/presentation/styles/group_region_ui.dart':
+            'class Style {}\n',
+      });
+
+      expect(findingsFor(result, 'ARCH211'), isEmpty);
+    });
+
+    test('still flags a sub-folder not in the built-ins or config', () async {
+      final result = await analyze({
+        '.flutter_cleanup.yaml':
+            'architecture:\n  sublayers:\n    presentation: [styles]\n',
+        'lib/features/auth/presentation/styles/s.dart': 'class S {}\n',
+        'lib/features/auth/presentation/gizmos/g.dart': 'class G {}\n',
+      });
+
+      final findings = findingsFor(result, 'ARCH211');
+      expect(findings, hasLength(1));
+      expect(findings.single.message,
+          contains('lib/features/auth/presentation/gizmos'));
+    });
+
+    test('allows an extra top-level folder declared in config', () async {
+      final result = await analyze({
+        '.flutter_cleanup.yaml':
+            'architecture:\n  top_level: [config]\n',
+        'lib/config/flavors.dart': 'class Flavors {}\n',
       });
 
       expect(findingsFor(result, 'ARCH212'), isEmpty);

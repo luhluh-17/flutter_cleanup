@@ -9,6 +9,7 @@ export 'src/analyzers/duplicate_widgets_analyzer.dart';
 export 'src/analyzers/unused_assets_analyzer.dart';
 export 'src/analyzers/unused_files_analyzer.dart';
 export 'src/architecture/architecture_analyzer.dart';
+export 'src/architecture/architecture_config.dart';
 export 'src/architecture/architecture_context.dart';
 export 'src/architecture/architecture_result.dart';
 export 'src/architecture/architecture_violation.dart';

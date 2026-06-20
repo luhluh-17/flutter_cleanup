@@ -1,4 +1,5 @@
 import '../../models/finding.dart';
+import '../architecture_config.dart';
 import '../architecture_context.dart';
 import '../architecture_violation.dart';
 import '../definition/layer.dart';
@@ -157,25 +158,50 @@ class StructureVocabularyRule implements ArchitectureRule {
     },
     'domain': {'entities', 'repositories', 'usecases', 'value_objects', 'services'},
     'application': {'services', 'coordinators', 'facades', 'runtime'},
-    'presentation': {'pages', 'providers', 'widgets', 'controllers', 'dialogs'},
+    'presentation': {
+      'pages',
+      'providers',
+      'widgets',
+      'controllers',
+      'dialogs',
+      'painters',
+    },
   };
 
-  /// Reverse of [_sublayerDirsByLayer]: sub-folder name → the layer whose
-  /// vocabulary owns it. Used to explain *why* a sub-folder is misplaced when its
-  /// name is valid but used in the wrong layer (e.g. `domain/models`). A name
-  /// shared by two layers (`repositories`) is never unrecognized in either, so it
-  /// never reaches the misplacement check and the arbitrary winner here is moot.
-  static final Map<String, String> _ownerLayerByDir = {
-    for (final entry in _sublayerDirsByLayer.entries)
-      for (final dir in entry.value) dir: entry.key,
-  };
+  /// Merges the built-in [_sublayerDirsByLayer] with any project extras declared
+  /// under `architecture.sublayers` in `.flutter_cleanup.yaml`. Extras are
+  /// additive — they widen a layer's vocabulary, never narrow it.
+  static Map<String, Set<String>> _mergedSublayers(ArchitectureConfig config) {
+    if (config.extraSublayers.isEmpty) return _sublayerDirsByLayer;
+    return {
+      for (final entry in _sublayerDirsByLayer.entries)
+        entry.key: {...entry.value, ...?config.extraSublayers[entry.key]},
+    };
+  }
+
+  /// Reverse of a sub-layer map: sub-folder name → the layer whose vocabulary
+  /// owns it. Used to explain *why* a sub-folder is misplaced when its name is
+  /// valid but used in the wrong layer (e.g. `domain/models`). A name shared by
+  /// two layers (`repositories`/`services`) is never unrecognized in either, so
+  /// it never reaches the misplacement check and the arbitrary winner is moot.
+  static Map<String, String> _ownerLayerByDir(
+    Map<String, Set<String>> sublayers,
+  ) =>
+      {
+        for (final entry in sublayers.entries)
+          for (final dir in entry.value) dir: entry.key,
+      };
 
   /// A trailing clause explaining that [subName] is recognized vocabulary, just
   /// from another layer — so naming a [layerDir] sub-folder after it is
-  /// misleading. Empty for genuine synonyms (`screens`, `controllers`) that don't
+  /// misleading. Empty for genuine synonyms (`screens`, `state`) that don't
   /// belong to any layer.
-  static String _misplacedVocabularyNote(String layerDir, String subName) {
-    final owner = _ownerLayerByDir[subName];
+  static String _misplacedVocabularyNote(
+    Map<String, String> ownerByDir,
+    String layerDir,
+    String subName,
+  ) {
+    final owner = ownerByDir[subName];
     if (owner == null || owner == layerDir) return '';
     if (layerDir == 'domain' && subName == 'models') {
       return ' "models" is the data layer\'s vocabulary, so "domain/models" is '
@@ -191,6 +217,11 @@ class StructureVocabularyRule implements ArchitectureRule {
 
   @override
   Iterable<ArchitectureViolation> check(ArchitectureContext context) sync* {
+    // Built-in vocabulary widened by any project extras from .flutter_cleanup.yaml.
+    final sublayerDirsByLayer = _mergedSublayers(context.config);
+    final ownerLayerByDir = _ownerLayerByDir(sublayerDirsByLayer);
+    final topLevelDirs = {..._topLevelDirs, ...context.config.extraTopLevelDirs};
+
     // folder path → first (lowest-sorted) file inside it, for stable anchors.
     final unknownTopLevel = <String, String>{};
     final unknownLayerDirs = <String, (String, String)>{}; // path → (feature, anchor)
@@ -207,7 +238,7 @@ class StructureVocabularyRule implements ArchitectureRule {
       if (segments.length < 2 || segments.first != 'lib') continue;
 
       // ARCH212 — lib/<dir>/** where <dir> is not a recognized top-level folder.
-      if (segments.length >= 3 && !_topLevelDirs.contains(segments[1])) {
+      if (segments.length >= 3 && !topLevelDirs.contains(segments[1])) {
         record(unknownTopLevel, 'lib/${segments[1]}', file.relPath);
         continue;
       }
@@ -235,7 +266,7 @@ class StructureVocabularyRule implements ArchitectureRule {
 
       // ARCH211 — unrecognized sub-folder directly under a layer.
       if (segments.length >= 6 &&
-          !_sublayerDirsByLayer[layerDir]!.contains(segments[4])) {
+          !sublayerDirsByLayer[layerDir]!.contains(segments[4])) {
         final folder = 'lib/features/$feature/$layerDir/${segments[4]}';
         final current = unknownSublayers[folder];
         if (current == null || file.relPath.compareTo(current.$3) < 0) {
@@ -279,7 +310,7 @@ class StructureVocabularyRule implements ArchitectureRule {
       final layerDir = folder.split('/')[3];
       final subName = folder.split('/').last;
       final allowed =
-          (_sublayerDirsByLayer[layerDir]!.toList()..sort()).join('/, ');
+          (sublayerDirsByLayer[layerDir]!.toList()..sort()).join('/, ');
       yield ArchitectureViolation(
         code: 'ARCH211',
         severity: Severity.warning,
@@ -290,7 +321,8 @@ class StructureVocabularyRule implements ArchitectureRule {
         layer: layer,
         relatedFiles: [folder],
         message: 'Unrecognized $layerDir sub-folder "$folder" — allowed: '
-            '$allowed/.${_misplacedVocabularyNote(layerDir, subName)}',
+            '$allowed/.'
+            '${_misplacedVocabularyNote(ownerLayerByDir, layerDir, subName)}',
       );
     }
 

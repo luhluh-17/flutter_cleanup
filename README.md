@@ -324,6 +324,24 @@ application and domain; application and data may use domain; domain depends on
 nothing outward. Only `data`, `domain`, and `presentation` are required per
 feature (ARCH201–203); `application/` is optional.
 
+**Extending the vocabulary.** The folder vocabulary is strict by design (so stray
+folders can't silently escape the layer rules), but real projects grow folders
+the canonical layout doesn't name. Rather than fork the tool, *add* to the
+vocabulary from `.flutter_cleanup.yaml`:
+
+```yaml
+architecture:
+  sublayers:
+    presentation: [styles]   # extra presentation/ sub-folders (painters is built-in)
+    data: [adapters]         # extra data/ sub-folders
+  top_level: [config]        # extra lib/<dir> folders beyond core/features/shared/…
+```
+
+Entries are **added** to the built-ins, never replace them, and only suppress the
+structure warnings (ARCH210–212) for the named folders — the layer/purity rules
+still apply. Parsing is tolerant: a missing section, wrong types, or unknown keys
+are ignored.
+
 The **score** starts at 100 and subtracts each violation's category weight
 (feature-boundary problems cost the most), floored at 0.
 

@@ -7,6 +7,7 @@ import 'package:yaml/yaml.dart';
 import '../analysis/path_utils.dart';
 import '../models/project_paths.dart';
 import '../services/ignore_service.dart';
+import 'architecture_config.dart';
 import 'dart_file_info.dart';
 import 'definition/architecture_definition.dart';
 import 'definition/layer.dart';
@@ -26,6 +27,7 @@ class ArchitectureContext {
     required this.files,
     required this.graph,
     required this.featureLayerDirs,
+    this.config = ArchitectureConfig.empty,
   });
 
   /// Absolute project root.
@@ -33,6 +35,9 @@ class ArchitectureContext {
 
   /// The active architecture style.
   final ArchitectureDefinition definition;
+
+  /// Project-specific vocabulary extensions from `.flutter_cleanup.yaml`.
+  final ArchitectureConfig config;
 
   /// Every parsed Dart file under `lib/`.
   final List<DartFileInfo> files;
@@ -112,6 +117,7 @@ class ArchitectureContext {
       files: files,
       graph: DependencyGraph.build(files),
       featureLayerDirs: _scanFeatureLayerDirs(paths.libDir),
+      config: ArchitectureConfig.forProject(paths.root),
     );
   }
 
