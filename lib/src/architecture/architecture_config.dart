@@ -7,14 +7,14 @@ import 'package:yaml/yaml.dart';
 ///
 /// The built-in [StructureVocabularyRule] vocabulary is intentionally strict so
 /// stray folders can't silently escape the layer rules. Real projects, however,
-/// legitimately grow folders the canonical layout doesn't name (`painters/`,
-/// `styles/`, `adapters/`, …). Rather than fork the tool, a project may *extend*
-/// the vocabulary through `.flutter_cleanup.yaml`:
+/// legitimately grow folders the canonical layout doesn't name (`effects/`,
+/// `adapters/`, …). Rather than fork the tool, a project may *extend* the
+/// vocabulary through `.flutter_cleanup.yaml`:
 ///
 /// ```yaml
 /// architecture:
 ///   sublayers:
-///     presentation: [styles]      # extra presentation/ sub-folders
+///     presentation: [effects]     # extra presentation/ sub-folders
 ///     data: [adapters]            # extra data/ sub-folders
 ///   top_level: [config]           # extra lib/<dir> folders
 /// ```

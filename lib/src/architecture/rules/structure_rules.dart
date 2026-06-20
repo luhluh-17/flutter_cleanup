@@ -165,6 +165,7 @@ class StructureVocabularyRule implements ArchitectureRule {
       'controllers',
       'dialogs',
       'painters',
+      'styles',
     },
   };
 

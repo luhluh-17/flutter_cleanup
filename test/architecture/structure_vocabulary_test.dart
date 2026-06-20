@@ -108,11 +108,13 @@ void main() {
       expect(findingsFor(result, 'ARCH211'), hasLength(2));
     });
 
-    test('allows presentation controllers, dialogs, and painters', () async {
+    test('allows presentation controllers, dialogs, painters, and styles',
+        () async {
       final result = await analyze({
         'lib/features/auth/presentation/controllers/c.dart': 'class C {}\n',
         'lib/features/auth/presentation/dialogs/d.dart': 'class D {}\n',
         'lib/features/auth/presentation/painters/p.dart': 'class P {}\n',
+        'lib/features/auth/presentation/styles/s.dart': 'class S {}\n',
       });
 
       expect(findingsFor(result, 'ARCH211'), isEmpty);
@@ -218,9 +220,8 @@ void main() {
         () async {
       final result = await analyze({
         '.flutter_cleanup.yaml':
-            'architecture:\n  sublayers:\n    presentation: [styles]\n',
-        'lib/features/auth/presentation/styles/group_region_ui.dart':
-            'class Style {}\n',
+            'architecture:\n  sublayers:\n    presentation: [effects]\n',
+        'lib/features/auth/presentation/effects/blur.dart': 'class Blur {}\n',
       });
 
       expect(findingsFor(result, 'ARCH211'), isEmpty);
@@ -229,8 +230,8 @@ void main() {
     test('still flags a sub-folder not in the built-ins or config', () async {
       final result = await analyze({
         '.flutter_cleanup.yaml':
-            'architecture:\n  sublayers:\n    presentation: [styles]\n',
-        'lib/features/auth/presentation/styles/s.dart': 'class S {}\n',
+            'architecture:\n  sublayers:\n    presentation: [effects]\n',
+        'lib/features/auth/presentation/effects/e.dart': 'class E {}\n',
         'lib/features/auth/presentation/gizmos/g.dart': 'class G {}\n',
       });
 

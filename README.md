@@ -313,7 +313,7 @@ dart run flutter_cleanup architecture --report      # + feature dependency tree
 | ARCH5xx | Feature boundaries (5) | cross-feature import (501), circular feature dependency (502), god-feature fan-out (503) |
 
 **Recognized layers.** Each feature is organized into four layers —
-`presentation/` (`pages`/`providers`/`widgets`/`controllers`/`dialogs`),
+`presentation/` (`pages`/`providers`/`widgets`/`controllers`/`dialogs`/`painters`/`styles`),
 `application/` (`services`/`coordinators`/`facades`/`runtime`),
 `domain/` (`entities`/`repositories`/`usecases`/`value_objects`/`services`), and
 `data/` (`datasources`/`data_sources`/`models`/`mappers`/`dto`/`repositories`).
@@ -332,7 +332,7 @@ vocabulary from `.flutter_cleanup.yaml`:
 ```yaml
 architecture:
   sublayers:
-    presentation: [styles]   # extra presentation/ sub-folders (painters is built-in)
+    presentation: [effects]  # extra presentation/ sub-folders
     data: [adapters]         # extra data/ sub-folders
   top_level: [config]        # extra lib/<dir> folders beyond core/features/shared/…
 ```
