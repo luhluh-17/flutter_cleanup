@@ -51,6 +51,10 @@ dart run flutter_cleanup architecture
 dart run flutter_cleanup architecture --path ../my_app
 dart run flutter_cleanup architecture --report   # also print the dependency tree
 
+# Flag maintainability smells (large files, long methods/build(), deep nesting)
+dart run flutter_cleanup maintainability
+dart run flutter_cleanup maintainability --path ../my_app
+
 # Run every analyzer above in a single pass
 dart run flutter_cleanup all
 dart run flutter_cleanup all --path ../my_app
@@ -102,9 +106,9 @@ ignore:
 ```
 
 The same ignore rules apply across `unused-assets`, `unused-files`,
-`duplicate-code`, and `duplicate-widgets` (and therefore `all`). Ignored paths
-are never reported, never enter the import/export graph, and never participate in
-duplicate comparisons.
+`duplicate-code`, `duplicate-widgets`, and `maintainability` (and therefore
+`all`). Ignored paths are never reported, never enter the import/export graph,
+and never participate in duplicate comparisons.
 
 > One deliberate exception: for `unused-assets`, ignored Dart files are still
 > *read* when looking for asset references. A generated file such as
@@ -357,6 +361,29 @@ structure warnings (ARCH210–212) for the named folders — the layer/purity ru
 still apply. Parsing is tolerant: a missing section, wrong types, or unknown keys
 are ignored.
 
+#### Maintainability thresholds
+
+The `maintainability` analyzer's thresholds are tunable from the same
+`.flutter_cleanup.yaml`. Every value defaults to the table in
+[`maintainability`](#maintainability); override only what you need (a partial
+`{ warning: … }` keeps the matching default `error`):
+
+```yaml
+maintainability:
+  enabled: true                              # set false to skip the analyzer
+  file_lines:           { warning: 500,  error: 1000 }
+  method_lines:         { warning: 50,   error: 100 }
+  build_method_lines:   { warning: 100,  error: 200 }
+  widget_count:         { warning: 10,   error: 20 }
+  widget_nesting_depth: { warning: 6,    error: 10 }
+```
+
+Parsing is tolerant (mirrors the rest of the config): a missing section,
+malformed YAML, or wrong-typed values fall back to the defaults. The analyzer
+also skips generated files by suffix (`*.g.dart`, `*.freezed.dart`, `*.gr.dart`,
+`*.config.dart`, `*.mocks.dart`, `*.pb.dart`, `*.pbenum.dart`, `*.pbjson.dart`,
+`*.pbserver.dart`) in addition to your `ignore:` patterns.
+
 The **score** starts at 100 and subtracts each violation's category weight
 (feature-boundary problems cost the most), floored at 0.
 
@@ -366,11 +393,64 @@ AST without an element model, so a few are inherently heuristic and reported at
 flags literal dependency construction; 403 keys on filename). This trade-off is
 surfaced as `"analysisMode": "syntactic-ast"` in the JSON.
 
+### `maintainability`
+
+Flags **maintainability smells** in non-generated Dart files under `lib/` —
+files, methods, and widget trees that have grown large enough to be worth
+refactoring. Each file is parsed once with the `analyzer` package and all five
+rules run over that single AST, so the command scales to large projects.
+
+```bash
+dart run flutter_cleanup maintainability --path ../my_app
+```
+
+**Rules** (each compared against a configurable warning/error threshold):
+
+| Rule | Measures | Default warning / error |
+| --- | --- | --- |
+| File length | Non-empty source lines in the file | 500 / 1000 |
+| Method length | Source lines of each function/method (getters, setters, constructors, and `build` excluded) | 50 / 100 |
+| `build()` length | Body length of a `Widget build(BuildContext)` method | 100 / 200 |
+| Widget count | Widget classes declared in one file (`StatelessWidget`, `StatefulWidget`, `ConsumerWidget`, `HookWidget`, `HookConsumerWidget`, `ConsumerStatefulWidget`) | 10 / 20 |
+| Widget nesting depth | Deepest widget-tree nesting inside a `build()` body | 6 / 10 |
+
+A measured value at or above the **error** threshold is reported at `error`
+severity, at or above **warning** as `warning`, and below warning produces no
+finding. Each finding carries an actionable recommendation:
+
+```text
+Maintainability
+───────────────
+! lib/features/home/home_page.dart — File contains 742 lines.
+    ↳ Split into smaller widgets or feature-specific files.
+! lib/features/home/home_page.dart:88 — build() method contains 156 lines.
+    ↳ Extract reusable widgets.
+! lib/dashboard/dashboard_page.dart — File contains 14 widget classes.
+    ↳ Move widgets into separate files.
+```
+
+**Configuration.** Thresholds are tunable (and the analyzer can be disabled
+entirely) from `.flutter_cleanup.yaml` — see
+[Maintainability thresholds](#maintainability-thresholds).
+
+**Known limitations:**
+
+- **Syntactic AST, no type resolution.** Widget classes are recognized by their
+  `extends` clause and widget nesting is a practical AST approximation: nesting
+  counts *widget* constructor expressions (`InstanceCreationExpression` and
+  PascalCase calls), skipping value types via a small blocklist (`EdgeInsets`,
+  `Color`, …). Depth is read from `build()` bodies only.
+- **Line counts are source-based**, not logical statements; a long multi-line
+  expression counts as the lines it spans.
+- **`build()` is matched by name + a single `BuildContext` parameter**, detected
+  from source text rather than a resolved type.
+
 ### `all`
 
 Runs every analyzer (`unused-assets`, `unused-files`, `duplicate-code`,
-`duplicate-widgets`, `architecture`) in a single pass. The project is validated
-once, then each analyzer's findings are printed under its own heading.
+`duplicate-widgets`, `maintainability`, `architecture`) in a single pass. The
+project is validated once, then each analyzer's findings are printed under its
+own heading.
 
 ```bash
 dart run flutter_cleanup all --path ../my_app
@@ -380,6 +460,9 @@ Like the individual commands, it exits non-zero only when validation fails
 (missing `pubspec.yaml` or `lib/`); findings themselves do not change the exit
 code. When `lib/main.dart` is absent, the `unused-files` section is skipped (its
 reachability root is undefined) while the other analyzers still run.
+
+The section order is `unused-assets`, `unused-files`, `duplicate-code`,
+`duplicate-widgets`, `maintainability`, `architecture`.
 
 ## JSON output (`--json`)
 
@@ -400,8 +483,8 @@ safely as fields are added later.
 
 ### Single-analyzer schema
 
-`unused-assets`, `unused-files`, `duplicate-code`, and `duplicate-widgets` each
-emit one analyzer document:
+`unused-assets`, `unused-files`, `duplicate-code`, `duplicate-widgets`, and
+`maintainability` each emit one analyzer document:
 
 ```json
 {
@@ -426,9 +509,10 @@ Each finding has a stable shape:
 | `path` | string | Project-relative path, forward-slashed. |
 | `severity` | string | One of `info`, `warning`, `error`. |
 | `message` | string | Human-readable description. |
-| `line` | int? | 1-based line. Optional — emitted by `architecture`; omitted otherwise. |
+| `line` | int? | 1-based line. Optional — emitted by `architecture` and `maintainability` (method/`build()`/nesting findings); omitted otherwise. |
 | `column` | int? | 1-based column. Optional. |
 | `confidence` | string? | `high`/`medium`/`low`. Optional — emitted by `architecture`. |
+| `recommendation` | string? | Actionable fix suggestion. Optional — emitted by `maintainability` (and any rule that has one). |
 
 Optional fields are omitted entirely when unset, so analyzers that work at file
 granularity produce the same document shape as before.
@@ -451,6 +535,7 @@ nested results use the same shape as above but omit their own `schemaVersion`
     { "analyzer": "unused-files", "findings": [] },
     { "analyzer": "duplicate-code", "findings": [] },
     { "analyzer": "duplicate-widgets", "findings": [] },
+    { "analyzer": "maintainability", "findings": [] },
     {
       "analyzer": "architecture",
       "findings": [],
@@ -501,7 +586,8 @@ lib/src/
   cli/                     CommandRunner setup and command registration
   commands/                One Command per CLI command + base + ReportPrinter
   analysis/                Analyzer interface + AnalysisResult (extension seam)
-  analyzers/               unused-assets/files, duplicate-code/widgets
+  analyzers/               unused-assets/files, duplicate-code/widgets,
+                           maintainability/ (config, issue model, nesting util)
   architecture/            ARCH rule engine: definition (ArchitectureDefinition,
                            Layer), layer classifier, import resolver, dependency
                            graph, parse-once context, rules/, scoring analyzer
@@ -529,8 +615,9 @@ is rendered. See [JSON output](#json-output---json).
 ### Command roadmap
 
 `scan`, `version`, `unused-assets`, `unused-files`, `duplicate-code`,
-`duplicate-widgets`, `architecture`, and `all` exist today. The architecture is
-ready for `graph` and `doctor` to be added the same way — no core changes needed.
+`duplicate-widgets`, `architecture`, `maintainability`, and `all` exist today.
+The architecture is ready for `graph` and `doctor` to be added the same way — no
+core changes needed.
 
 ### Adding a command
 

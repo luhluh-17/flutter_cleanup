@@ -77,7 +77,7 @@ void main() {
       expect(json['schemaVersion'], 1);
 
       final results = json['results'] as List<Object?>;
-      expect(results, hasLength(5));
+      expect(results, hasLength(6));
       expect(
         results
             .map((r) => (r as Map<String, dynamic>)['analyzer'])
@@ -87,6 +87,7 @@ void main() {
           'unused-files',
           'duplicate-code',
           'duplicate-widgets',
+          'maintainability',
           'architecture',
         ],
       );

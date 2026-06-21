@@ -4,6 +4,7 @@ import '../analysis/analysis_result.dart';
 import '../analysis/analyzer.dart';
 import '../analyzers/duplicate_code_analyzer.dart';
 import '../analyzers/duplicate_widgets_analyzer.dart';
+import '../analyzers/maintainability/maintainability_analyzer.dart';
 import '../analyzers/unused_assets_analyzer.dart';
 import '../analyzers/unused_files_analyzer.dart';
 import '../architecture/architecture_analyzer.dart';
@@ -29,6 +30,7 @@ class AllCommand extends FlutterCleanupCommand {
     Analyzer? unusedFiles,
     Analyzer? duplicateCode,
     Analyzer? duplicateWidgets,
+    Analyzer? maintainability,
     Analyzer? architecture,
   })  : _logger = logger ?? Logger(),
         _validator = validator ?? const ProjectValidator(),
@@ -37,6 +39,8 @@ class AllCommand extends FlutterCleanupCommand {
         _duplicateCode = duplicateCode ?? const DuplicateCodeAnalyzer(),
         _duplicateWidgets =
             duplicateWidgets ?? const DuplicateWidgetsAnalyzer(),
+        _maintainability =
+            maintainability ?? const MaintainabilityAnalyzer(),
         _architecture = architecture ?? ArchitectureAnalyzer();
 
   final Logger _logger;
@@ -45,6 +49,7 @@ class AllCommand extends FlutterCleanupCommand {
   final Analyzer _unusedFiles;
   final Analyzer _duplicateCode;
   final Analyzer _duplicateWidgets;
+  final Analyzer _maintainability;
   final Analyzer _architecture;
 
   @override
@@ -53,7 +58,7 @@ class AllCommand extends FlutterCleanupCommand {
   @override
   String get description =>
       'Run all analyzers (unused-assets, unused-files, duplicate-code, '
-      'duplicate-widgets).';
+      'duplicate-widgets, maintainability, architecture).';
 
   @override
   Future<int> run() async {
@@ -88,6 +93,11 @@ class AllCommand extends FlutterCleanupCommand {
         analyzer: _duplicateWidgets,
         title: 'Duplicate Widgets',
         itemNoun: 'duplicate widget pair',
+      ),
+      (
+        analyzer: _maintainability,
+        title: 'Maintainability',
+        itemNoun: 'maintainability issue',
       ),
       (
         analyzer: _architecture,
