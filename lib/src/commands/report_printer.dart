@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../analysis/analysis_result.dart';
+import '../analyzers/maintainability/maintainability_config.dart';
 import '../models/finding.dart';
 import '../models/output_format.dart';
 import '../models/validation_result.dart';
@@ -70,6 +71,53 @@ class ReportPrinter {
           ...result.toJson(),
         }));
     }
+  }
+
+  /// Renders the maintainability thresholds as a reference legend.
+  ///
+  /// Text mode prints an "Accepted standards (warning / error)" table so users
+  /// see the targets each metric is measured against. JSON mode is a no-op — the
+  /// legend is diagnostic chrome and is kept out of the machine-readable
+  /// document (mirrors how [validationReport] suppresses chrome in JSON).
+  void maintainabilityThresholds(MaintainabilityConfig config) {
+    switch (format) {
+      case OutputFormat.text:
+        _maintainabilityThresholdsText(config);
+      case OutputFormat.json:
+        break;
+    }
+  }
+
+  void _maintainabilityThresholdsText(MaintainabilityConfig config) {
+    _logger.heading('Accepted standards (warning / error)');
+    final rows = <({String label, Threshold threshold, String unit})>[
+      (label: 'File length', threshold: config.fileLines, unit: 'lines'),
+      (label: 'Method length', threshold: config.methodLines, unit: 'lines'),
+      (
+        label: 'build() length',
+        threshold: config.buildMethodLines,
+        unit: 'lines'
+      ),
+      (label: 'Widget count', threshold: config.widgetCount, unit: 'classes'),
+      (
+        label: 'Nesting depth',
+        threshold: config.widgetNestingDepth,
+        unit: 'levels'
+      ),
+    ];
+    final labelWidth =
+        rows.map((r) => r.label.length).reduce((a, b) => a > b ? a : b);
+    final ranges = {
+      for (final r in rows)
+        r.label: '${r.threshold.warning} / ${r.threshold.error}',
+    };
+    final rangeWidth =
+        ranges.values.map((s) => s.length).reduce((a, b) => a > b ? a : b);
+    for (final r in rows) {
+      final range = ranges[r.label]!.padLeft(rangeWidth);
+      _logger.plain('  ${r.label.padRight(labelWidth)}   $range ${r.unit}');
+    }
+    _logger.blank();
   }
 
   /// Renders several [AnalysisResult]s as a single aggregate JSON document.

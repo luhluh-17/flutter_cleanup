@@ -1,5 +1,6 @@
 import '../analysis/analyzer.dart';
 import '../analyzers/maintainability/maintainability_analyzer.dart';
+import '../analyzers/maintainability/maintainability_config.dart';
 import '../models/output_format.dart';
 import '../models/project_paths.dart';
 import '../services/logger.dart';
@@ -54,6 +55,11 @@ class MaintainabilityCommand extends FlutterCleanupCommand {
     if (outputFormat == OutputFormat.text) {
       _logger.blank();
     }
+
+    // Show the accepted-standards legend before the findings so users always
+    // see the targets each metric is measured against (text mode only).
+    printer.maintainabilityThresholds(MaintainabilityConfig.forProject(paths.root));
+
     final result = await _analyzer.analyze(paths);
     printer.findings(
       result,

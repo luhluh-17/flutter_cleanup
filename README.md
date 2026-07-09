@@ -413,7 +413,7 @@ dart run flutter_cleanup maintainability --path ../my_app
 
 | Rule | Measures | Default warning / error |
 | --- | --- | --- |
-| File length | Non-empty source lines in the file | 500 / 1000 |
+| File length | Lines of code in the file (comment-only and blank lines excluded) | 500 / 1000 |
 | Method length | Source lines of each function/method (getters, setters, constructors, and `build` excluded) | 50 / 100 |
 | `build()` length | Body length of a `Widget build(BuildContext)` method | 100 / 200 |
 | Widget count | Widget classes declared in one file (`StatelessWidget`, `StatefulWidget`, `ConsumerWidget`, `HookWidget`, `HookConsumerWidget`, `ConsumerStatefulWidget`) | 10 / 20 |
@@ -421,16 +421,26 @@ dart run flutter_cleanup maintainability --path ../my_app
 
 A measured value at or above the **error** threshold is reported at `error`
 severity, at or above **warning** as `warning`, and below warning produces no
-finding. Each finding carries an actionable recommendation:
+finding. Each finding shows the accepted `warning–error` limit range and carries
+an actionable recommendation. An **Accepted standards** legend of the active
+thresholds is printed above the findings on every text-mode run:
 
 ```text
+Accepted standards (warning / error)
+────────────────────────────────────
+  File length      500 / 1000 lines
+  Method length     50 / 100 lines
+  build() length   100 / 200 lines
+  Widget count      10 / 20 classes
+  Nesting depth      6 / 10 levels
+
 Maintainability
 ───────────────
-! lib/features/home/home_page.dart — File contains 742 lines.
+! lib/features/home/home_page.dart — File contains 742 lines (limit: 500–1000).
     ↳ Split into smaller widgets or feature-specific files.
-! lib/features/home/home_page.dart:88 — build() method contains 156 lines.
+! lib/features/home/home_page.dart:88 — build() method contains 156 lines (limit: 100–200).
     ↳ Extract reusable widgets.
-! lib/dashboard/dashboard_page.dart — File contains 14 widget classes.
+! lib/dashboard/dashboard_page.dart — File contains 14 widget classes (limit: 10–20).
     ↳ Move widgets into separate files.
 ```
 

@@ -1,4 +1,5 @@
 import '../../../models/finding.dart';
+import '../maintainability_config.dart';
 
 /// The maintainability metric a [MaintainabilityIssue] reports on.
 enum MaintainabilityIssueKind {
@@ -22,6 +23,7 @@ class MaintainabilityIssue {
     required this.kind,
     required this.severity,
     required this.value,
+    required this.threshold,
     this.subject,
     this.line,
   });
@@ -34,6 +36,10 @@ class MaintainabilityIssue {
 
   /// The measured count that crossed a threshold (lines, widgets, or depth).
   final int value;
+
+  /// The configured warning/error bounds for this metric, shown in the message
+  /// as the accepted limit range.
+  final Threshold threshold;
 
   /// Method or widget name the issue is about, when applicable.
   final String? subject;
@@ -54,17 +60,20 @@ class MaintainabilityIssue {
   String get _message {
     switch (kind) {
       case MaintainabilityIssueKind.fileLength:
-        return 'File contains $value lines.';
+        return 'File contains $value lines$_limit.';
       case MaintainabilityIssueKind.methodLength:
-        return 'Method $subject() contains $value lines.';
+        return 'Method $subject() contains $value lines$_limit.';
       case MaintainabilityIssueKind.buildMethodLength:
-        return 'build() method contains $value lines.';
+        return 'build() method contains $value lines$_limit.';
       case MaintainabilityIssueKind.widgetCount:
-        return 'File contains $value widget classes.';
+        return 'File contains $value widget classes$_limit.';
       case MaintainabilityIssueKind.nestingDepth:
-        return 'Maximum widget nesting depth is $value.';
+        return 'Maximum widget nesting depth is $value$_limit.';
     }
   }
+
+  /// The accepted `warning–error` range, rendered as ` (limit: W–E)`.
+  String get _limit => ' (limit: ${threshold.warning}–${threshold.error})';
 
   String get _recommendation {
     switch (kind) {

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/source/line_info.dart';
 import 'package:path/path.dart' as p;
@@ -20,7 +21,7 @@ import 'utils/nesting_depth_calculator.dart';
 ///
 /// Five metrics are measured against configurable thresholds
 /// ([MaintainabilityConfig]):
-/// 1. file length (non-empty source lines),
+/// 1. file length (lines of code, excluding comment-only and blank lines),
 /// 2. method length (any `FunctionDeclaration`/`MethodDeclaration` except
 ///    getters, setters, constructors and `build`),
 /// 3. `build()` method length,
@@ -117,11 +118,11 @@ class MaintainabilityAnalyzer implements Analyzer {
 
     final issues = <MaintainabilityIssue>[];
 
-    // Rule 1: file length (non-empty source lines).
+    // Rule 1: file length (lines of code, excluding comment-only/blank lines).
     _addIfOverThreshold(
       issues,
       kind: MaintainabilityIssueKind.fileLength,
-      value: _nonEmptyLineCount(source),
+      value: _codeLineCount(unit, lineInfo),
       threshold: config.fileLines,
     );
 
@@ -166,6 +167,7 @@ class MaintainabilityAnalyzer implements Analyzer {
       kind: kind,
       severity: severity,
       value: value,
+      threshold: threshold,
       subject: subject,
       line: line,
     ));
@@ -178,12 +180,27 @@ class MaintainabilityAnalyzer implements Analyzer {
     return null;
   }
 
-  static int _nonEmptyLineCount(String source) {
-    var count = 0;
-    for (final line in source.split('\n')) {
-      if (line.trim().isNotEmpty) count++;
+  /// Counts distinct source lines that contain at least one real code token.
+  ///
+  /// Dart comments are attached to tokens as `precedingComments` and are not
+  /// part of the main token chain, so iterating [unit]'s tokens naturally
+  /// excludes comment-only lines; blank lines carry no token and are excluded
+  /// too. A line with code followed by a trailing comment still counts. Tokens
+  /// spanning multiple lines (e.g. multi-line strings) mark every line covered.
+  static int _codeLineCount(CompilationUnit unit, LineInfo lineInfo) {
+    final lines = <int>{};
+    Token? token = unit.beginToken;
+    while (token != null && token.type != TokenType.EOF) {
+      final start = lineInfo.getLocation(token.offset).lineNumber;
+      final end = lineInfo.getLocation(token.end).lineNumber;
+      for (var l = start; l <= end; l++) {
+        lines.add(l);
+      }
+      final next = token.next;
+      if (next == null || next == token) break;
+      token = next;
     }
-    return count;
+    return lines.length;
   }
 
   static bool _isGenerated(String relPath) =>

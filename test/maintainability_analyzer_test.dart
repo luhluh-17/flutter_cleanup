@@ -42,11 +42,13 @@ void main() {
   Iterable<Finding> findingsOf(AnalysisResult r, String messageSubstring) =>
       r.findings.where((f) => f.message.contains(messageSubstring));
 
-  /// A file padded to [lines] non-empty lines via a top-level comment block.
+  /// A file with exactly [lines] lines of code (one top-level declaration per
+  /// line). Real code — not comments — because comment-only lines no longer
+  /// count toward the file-length metric.
   String fileWithLines(int lines) {
     final buffer = StringBuffer();
     for (var i = 0; i < lines; i++) {
-      buffer.writeln('// padding line $i');
+      buffer.writeln('final v$i = $i;');
     }
     return buffer.toString();
   }
@@ -93,15 +95,53 @@ void main() {
 
     test('blank lines are not counted', () async {
       writePubspec();
-      // 400 real lines + 400 blank lines = 800 raw, 400 non-empty (< 500).
+      // 400 code lines + 400 blank lines = 800 raw, 400 counted (< 500).
       final buffer = StringBuffer();
       for (var i = 0; i < 400; i++) {
-        buffer.writeln('// line $i');
+        buffer.writeln('final v$i = $i;');
         buffer.writeln();
       }
       writeDart('padded.dart', buffer.toString());
 
       expect(findingsOf(await run(), 'lines'), isEmpty);
+    });
+
+    test('comment-only lines are not counted', () async {
+      writePubspec();
+      // 600 comment lines + 100 code lines: only the 100 code lines count,
+      // which is under the default warning threshold of 500.
+      final buffer = StringBuffer();
+      for (var i = 0; i < 600; i++) {
+        buffer.writeln('// documentation line $i');
+      }
+      for (var i = 0; i < 100; i++) {
+        buffer.writeln('final v$i = $i;');
+      }
+      writeDart('documented.dart', buffer.toString());
+
+      expect(findingsOf(await run(), 'lines'), isEmpty);
+    });
+
+    test('a trailing comment after code still counts the line', () async {
+      writePubspec();
+      // 600 code lines, each with a trailing comment — all 600 count (> 500).
+      final buffer = StringBuffer();
+      for (var i = 0; i < 600; i++) {
+        buffer.writeln('final v$i = $i; // note $i');
+      }
+      writeDart('trailing.dart', buffer.toString());
+
+      final findings = findingsOf(await run(), 'lines').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.message, contains('600 lines'));
+    });
+
+    test('the finding message shows the accepted limit range', () async {
+      writePubspec();
+      writeDart('big.dart', fileWithLines(600)); // default 500 / 1000
+
+      final findings = findingsOf(await run(), 'lines').toList();
+      expect(findings.single.message, contains('limit: 500–1000'));
     });
   });
 
@@ -116,6 +156,7 @@ void main() {
           findingsOf(await run(), 'generateMonthlyReport()').toList();
       expect(findings, hasLength(1));
       expect(findings.single.message, contains('Method generateMonthlyReport()'));
+      expect(findings.single.message, contains('limit: 50–100'));
       expect(findings.single.severity, Severity.warning);
     });
 

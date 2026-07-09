@@ -150,4 +150,46 @@ void main() {
         contains('lib/features/a/presentation/widgets/w.dart — '));
     expect(raw, isNot(contains('w.dart:')));
   });
+
+  group('maintainability thresholds legend', () {
+    Future<String> renderLegend(
+      MaintainabilityConfig config, {
+      OutputFormat format = OutputFormat.text,
+    }) async {
+      final outFile = File(p.join(tempDir.path, 'legend.txt'));
+      final sink = outFile.openWrite();
+      final logger = Logger(useColor: false, out: sink, err: sink);
+      ReportPrinter(logger, format: format).maintainabilityThresholds(config);
+      await sink.flush();
+      await sink.close();
+      return outFile.readAsStringSync();
+    }
+
+    test('text mode prints the accepted-standards table', () async {
+      final raw = await renderLegend(const MaintainabilityConfig());
+
+      expect(raw, contains('Accepted standards (warning / error)'));
+      expect(raw, contains('File length'));
+      expect(raw, contains('500 / 1000 lines'));
+      expect(raw, contains('Nesting depth'));
+      expect(raw, contains('6 / 10 levels'));
+    });
+
+    test('reflects custom configured thresholds', () async {
+      final raw = await renderLegend(const MaintainabilityConfig(
+        fileLines: Threshold(warning: 80, error: 160),
+      ));
+
+      expect(raw, contains('80 / 160 lines'));
+    });
+
+    test('json mode emits nothing (legend is text-only chrome)', () async {
+      final raw = await renderLegend(
+        const MaintainabilityConfig(),
+        format: OutputFormat.json,
+      );
+
+      expect(raw, isEmpty);
+    });
+  });
 }

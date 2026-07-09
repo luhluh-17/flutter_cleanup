@@ -64,7 +64,7 @@ class MaintainabilityConfig {
   /// findings.
   final bool enabled;
 
-  /// Total non-empty source lines per file.
+  /// Lines of code per file (comment-only and blank lines excluded).
   final Threshold fileLines;
 
   /// Source lines per method/function (excluding `build`).
