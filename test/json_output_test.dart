@@ -46,6 +46,8 @@ void main() {
       'unused-files',
       'duplicate-code',
       'duplicate-widgets',
+      'maintainability',
+      'primary-constructors',
       'architecture',
     ]) {
       test('$analyzer --json emits a valid single-analyzer document', () async {
@@ -77,7 +79,7 @@ void main() {
       expect(json['schemaVersion'], 1);
 
       final results = json['results'] as List<Object?>;
-      expect(results, hasLength(6));
+      expect(results, hasLength(7));
       expect(
         results
             .map((r) => (r as Map<String, dynamic>)['analyzer'])
@@ -88,6 +90,7 @@ void main() {
           'duplicate-code',
           'duplicate-widgets',
           'maintainability',
+          'primary-constructors',
           'architecture',
         ],
       );

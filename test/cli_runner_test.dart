@@ -92,6 +92,36 @@ void main() {
     });
   });
 
+  group('primary-constructors', () {
+    late Directory tempDir;
+
+    setUp(() {
+      tempDir = Directory.systemTemp.createTempSync('flutter_cleanup_cli_');
+      File(p.join(tempDir.path, 'pubspec.yaml')).writeAsStringSync('name: x\n');
+      Directory(p.join(tempDir.path, 'lib')).createSync();
+    });
+
+    tearDown(() {
+      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    });
+
+    test('returns 0 for a valid project', () async {
+      expect(
+        await runner().run(['primary-constructors', '--path', tempDir.path]),
+        0,
+      );
+    });
+
+    test('returns 1 for an invalid project', () async {
+      tempDir.deleteSync(recursive: true);
+      tempDir.createSync();
+      expect(
+        await runner().run(['primary-constructors', '--path', tempDir.path]),
+        1,
+      );
+    });
+  });
+
   group('all', () {
     late Directory tempDir;
 

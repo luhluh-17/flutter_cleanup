@@ -55,6 +55,10 @@ dart run flutter_cleanup architecture --report   # also print the dependency tre
 dart run flutter_cleanup maintainability
 dart run flutter_cleanup maintainability --path ../my_app
 
+# Find classes that are safe to migrate to a Dart 3.12+ primary constructor
+dart run flutter_cleanup primary-constructors
+dart run flutter_cleanup primary-constructors --path ../my_app
+
 # Run every analyzer above in a single pass
 dart run flutter_cleanup all
 dart run flutter_cleanup all --path ../my_app
@@ -106,9 +110,10 @@ ignore:
 ```
 
 The same ignore rules apply across `unused-assets`, `unused-files`,
-`duplicate-code`, `duplicate-widgets`, and `maintainability` (and therefore
-`all`). Ignored paths are never reported, never enter the import/export graph,
-and never participate in duplicate comparisons.
+`duplicate-code`, `duplicate-widgets`, `maintainability`, and
+`primary-constructors` (and therefore `all`). Ignored paths are never reported,
+never enter the import/export graph, and never participate in duplicate
+comparisons.
 
 > One deliberate exception: for `unused-assets`, ignored Dart files are still
 > *read* when looking for asset references. A generated file such as
@@ -445,12 +450,78 @@ entirely) from `.flutter_cleanup.yaml` — see
 - **`build()` is matched by name + a single `BuildContext` parameter**, detected
   from source text rather than a resolved type.
 
+### `primary-constructors`
+
+Identifies classes under `lib/` that are **safe candidates** for migration to a
+Dart 3.12+ [primary constructor](https://codewithandrea.com/articles/safely-migrate-primary-constructors/)
+— the syntax that folds field declaration and constructor parameters into the
+class header, removing the classic widget boilerplate:
+
+```dart
+// before                                    // after (Dart 3.12+)
+class PrimaryButton extends StatelessWidget {
+  const PrimaryButton({                       class PrimaryButton({
+    super.key,                                  super.key,
+    required this.label,                        required final String label,
+  });                                         }) extends StatelessWidget {
+  final String label;
+  ...                                           ...
+}                                             }
+```
+
+```bash
+dart run flutter_cleanup primary-constructors --path ../my_app
+dart run flutter_cleanup primary-constructors --json
+```
+
+Migrating is **not always safe** — a field doc-comment can silently drop
+`required`, a constructor body that initializes a field can't be folded, an
+untyped field breaks, a named `super(...)` call can't be reproduced, and so on.
+This command therefore reports only the **provably safe** subset: a
+high-precision "ready to migrate" signal, not a lint of blockers. Each candidate
+is emitted as an `info` finding.
+
+**A class is reported only when all of the following hold** (each rule maps to
+one of the article's "unsafe situations"):
+
+- It declares **exactly one constructor**, and that constructor is **unnamed**,
+  **generative** (no `factory`), has **no initializer list** (rules out named
+  `super(...)` calls and `: field = x`), and has **no body or an empty body**.
+- **Every constructor parameter** is a field formal (`this.x`) or super formal
+  (`super.x`), and there is **at least one `this.` field formal** (otherwise
+  there is no boilerplate to remove).
+- **Every field bound by a `this.` formal** is `final`, **explicitly typed**,
+  **uninitialized**, not `late`/`static`, carries **no annotation**, and has
+  **no documentation comment** (which could otherwise swallow `required`).
+
+Anything failing a check is silently skipped rather than reported.
+
+```text
+Primary constructors
+────────────────────
+• lib/widgets/primary_button.dart:3 — Class "PrimaryButton" is a safe candidate for primary-constructor migration.
+    ↳ Convert to a Dart 3.12+ primary constructor to remove field/constructor boilerplate.
+
+! 1 migration candidate found.
+```
+
+**Known limitations:**
+
+- **Syntactic AST, no type resolution.** Everything above is a source-level
+  check; the tool never confirms the class actually compiles, and it does not
+  perform the migration (it only surfaces candidates).
+- **Conservative by design.** Because it skips anything questionable, some
+  genuinely-migratable classes (e.g. those with an inherited field formal, or a
+  benign non-field parameter) are not reported.
+- Generated files are skipped by suffix (same list as `maintainability`) in
+  addition to your `ignore:` patterns.
+
 ### `all`
 
 Runs every analyzer (`unused-assets`, `unused-files`, `duplicate-code`,
-`duplicate-widgets`, `maintainability`, `architecture`) in a single pass. The
-project is validated once, then each analyzer's findings are printed under its
-own heading.
+`duplicate-widgets`, `maintainability`, `primary-constructors`, `architecture`)
+in a single pass. The project is validated once, then each analyzer's findings
+are printed under its own heading.
 
 ```bash
 dart run flutter_cleanup all --path ../my_app
@@ -462,7 +533,7 @@ code. When `lib/main.dart` is absent, the `unused-files` section is skipped (its
 reachability root is undefined) while the other analyzers still run.
 
 The section order is `unused-assets`, `unused-files`, `duplicate-code`,
-`duplicate-widgets`, `maintainability`, `architecture`.
+`duplicate-widgets`, `maintainability`, `primary-constructors`, `architecture`.
 
 ## JSON output (`--json`)
 
@@ -483,8 +554,8 @@ safely as fields are added later.
 
 ### Single-analyzer schema
 
-`unused-assets`, `unused-files`, `duplicate-code`, `duplicate-widgets`, and
-`maintainability` each emit one analyzer document:
+`unused-assets`, `unused-files`, `duplicate-code`, `duplicate-widgets`,
+`maintainability`, and `primary-constructors` each emit one analyzer document:
 
 ```json
 {
@@ -536,6 +607,7 @@ nested results use the same shape as above but omit their own `schemaVersion`
     { "analyzer": "duplicate-code", "findings": [] },
     { "analyzer": "duplicate-widgets", "findings": [] },
     { "analyzer": "maintainability", "findings": [] },
+    { "analyzer": "primary-constructors", "findings": [] },
     {
       "analyzer": "architecture",
       "findings": [],
@@ -587,7 +659,8 @@ lib/src/
   commands/                One Command per CLI command + base + ReportPrinter
   analysis/                Analyzer interface + AnalysisResult (extension seam)
   analyzers/               unused-assets/files, duplicate-code/widgets,
-                           maintainability/ (config, issue model, nesting util)
+                           maintainability/ (config, issue model, nesting util),
+                           primary-constructors/
   architecture/            ARCH rule engine: definition (ArchitectureDefinition,
                            Layer), layer classifier, import resolver, dependency
                            graph, parse-once context, rules/, scoring analyzer
@@ -615,9 +688,9 @@ is rendered. See [JSON output](#json-output---json).
 ### Command roadmap
 
 `scan`, `version`, `unused-assets`, `unused-files`, `duplicate-code`,
-`duplicate-widgets`, `architecture`, `maintainability`, and `all` exist today.
-The architecture is ready for `graph` and `doctor` to be added the same way — no
-core changes needed.
+`duplicate-widgets`, `architecture`, `maintainability`, `primary-constructors`,
+and `all` exist today. The architecture is ready for `graph` and `doctor` to be
+added the same way — no core changes needed.
 
 ### Adding a command
 

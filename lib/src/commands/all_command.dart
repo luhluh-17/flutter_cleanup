@@ -5,6 +5,7 @@ import '../analysis/analyzer.dart';
 import '../analyzers/duplicate_code_analyzer.dart';
 import '../analyzers/duplicate_widgets_analyzer.dart';
 import '../analyzers/maintainability/maintainability_analyzer.dart';
+import '../analyzers/primary_constructors/primary_constructors_analyzer.dart';
 import '../analyzers/unused_assets_analyzer.dart';
 import '../analyzers/unused_files_analyzer.dart';
 import '../architecture/architecture_analyzer.dart';
@@ -31,6 +32,7 @@ class AllCommand extends FlutterCleanupCommand {
     Analyzer? duplicateCode,
     Analyzer? duplicateWidgets,
     Analyzer? maintainability,
+    Analyzer? primaryConstructors,
     Analyzer? architecture,
   })  : _logger = logger ?? Logger(),
         _validator = validator ?? const ProjectValidator(),
@@ -41,6 +43,8 @@ class AllCommand extends FlutterCleanupCommand {
             duplicateWidgets ?? const DuplicateWidgetsAnalyzer(),
         _maintainability =
             maintainability ?? const MaintainabilityAnalyzer(),
+        _primaryConstructors =
+            primaryConstructors ?? const PrimaryConstructorsAnalyzer(),
         _architecture = architecture ?? ArchitectureAnalyzer();
 
   final Logger _logger;
@@ -50,6 +54,7 @@ class AllCommand extends FlutterCleanupCommand {
   final Analyzer _duplicateCode;
   final Analyzer _duplicateWidgets;
   final Analyzer _maintainability;
+  final Analyzer _primaryConstructors;
   final Analyzer _architecture;
 
   @override
@@ -58,7 +63,8 @@ class AllCommand extends FlutterCleanupCommand {
   @override
   String get description =>
       'Run all analyzers (unused-assets, unused-files, duplicate-code, '
-      'duplicate-widgets, maintainability, architecture).';
+      'duplicate-widgets, maintainability, primary-constructors, '
+      'architecture).';
 
   @override
   Future<int> run() async {
@@ -98,6 +104,11 @@ class AllCommand extends FlutterCleanupCommand {
         analyzer: _maintainability,
         title: 'Maintainability',
         itemNoun: 'maintainability issue',
+      ),
+      (
+        analyzer: _primaryConstructors,
+        title: 'Primary constructors',
+        itemNoun: 'migration candidate',
       ),
       (
         analyzer: _architecture,
