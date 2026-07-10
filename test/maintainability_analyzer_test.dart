@@ -30,7 +30,6 @@ void main() {
     file.writeAsStringSync(contents);
   }
 
-  /// Writes a `.flutter_cleanup.yaml` in the project root.
   void writeConfig(String contents) {
     File(p.join(tempDir.path, '.flutter_cleanup.yaml'))
         .writeAsStringSync(contents);
@@ -42,15 +41,43 @@ void main() {
   Iterable<Finding> findingsOf(AnalysisResult r, String messageSubstring) =>
       r.findings.where((f) => f.message.contains(messageSubstring));
 
-  /// A file with exactly [lines] lines of code (one top-level declaration per
-  /// line). Real code — not comments — because comment-only lines no longer
-  /// count toward the file-length metric.
+  /// A file with exactly [lines] lines of code and no class (classified as a
+  /// generic file, so the `file_lines` limit of 300 applies).
   String fileWithLines(int lines) {
     final buffer = StringBuffer();
     for (var i = 0; i < lines; i++) {
       buffer.writeln('final v$i = $i;');
     }
     return buffer.toString();
+  }
+
+  /// A `StatelessWidget` file (classified as a widget file, limit 250) padded to
+  /// `6 + padLines` code lines.
+  String widgetFile(String name, {int padLines = 0}) {
+    final b = StringBuffer("import 'package:flutter/material.dart';\n");
+    b.writeln('class $name extends StatelessWidget {');
+    b.writeln('  const $name({super.key});');
+    b.writeln('  @override');
+    b.writeln('  Widget build(BuildContext context) => const Placeholder();');
+    b.writeln('}');
+    for (var i = 0; i < padLines; i++) {
+      b.writeln('final v$i = $i;');
+    }
+    return b.toString();
+  }
+
+  /// A plain class file padded to `3 + padLines` code lines. [base] optionally
+  /// sets an `extends` clause (used to make it a controller).
+  String plainClassFile(String className, {String? base, int padLines = 0}) {
+    final ext = base == null ? '' : ' extends $base';
+    final b = StringBuffer();
+    b.writeln('class $className$ext {');
+    b.writeln('  $className();');
+    b.writeln('}');
+    for (var i = 0; i < padLines; i++) {
+      b.writeln('final v$i = $i;');
+    }
+    return b.toString();
   }
 
   /// A function named [name] whose body spans roughly [bodyStatements] lines.
@@ -64,105 +91,124 @@ void main() {
     return buffer.toString();
   }
 
-  // --- Rule 1: file length ---------------------------------------------------
+  // --- File length: generic --------------------------------------------------
 
-  group('file length', () {
-    test('over the warning threshold reports a warning', () async {
+  group('generic file length (limit 300)', () {
+    test('a file over the limit is reported', () async {
       writePubspec();
-      writeDart('big.dart', fileWithLines(600)); // default warning 500
+      writeDart('big.dart', fileWithLines(310));
 
-      final findings = findingsOf(await run(), 'lines').toList();
+      final findings = findingsOf(await run(), 'File contains').toList();
       expect(findings, hasLength(1));
+      expect(findings.single.rule, 'file_length');
       expect(findings.single.severity, Severity.warning);
-      expect(findings.single.message, contains('600 lines'));
+      expect(findings.single.message, contains('310 lines'));
+      expect(findings.single.message, contains('limit: 300'));
       expect(findings.single.recommendation, isNotNull);
     });
 
-    test('over the error threshold reports an error', () async {
+    test('exactly at the limit is allowed (≤ is inclusive)', () async {
       writePubspec();
-      writeDart('huge.dart', fileWithLines(1100)); // default error 1000
-
-      final findings = findingsOf(await run(), 'lines').toList();
-      expect(findings.single.severity, Severity.error);
+      writeDart('edge.dart', fileWithLines(300));
+      expect(findingsOf(await run(), 'File contains'), isEmpty);
     });
 
-    test('a small file produces no file-length finding', () async {
+    test('one over the limit is flagged', () async {
       writePubspec();
-      writeDart('small.dart', fileWithLines(100));
-
-      expect(findingsOf(await run(), 'lines'), isEmpty);
+      writeDart('edge.dart', fileWithLines(301));
+      expect(findingsOf(await run(), 'File contains'), hasLength(1));
     });
 
-    test('blank lines are not counted', () async {
+    test('blank and comment-only lines are not counted', () async {
       writePubspec();
-      // 400 code lines + 400 blank lines = 800 raw, 400 counted (< 500).
       final buffer = StringBuffer();
-      for (var i = 0; i < 400; i++) {
+      for (var i = 0; i < 200; i++) {
         buffer.writeln('final v$i = $i;');
         buffer.writeln();
+        buffer.writeln('// comment $i');
       }
       writeDart('padded.dart', buffer.toString());
-
-      expect(findingsOf(await run(), 'lines'), isEmpty);
-    });
-
-    test('comment-only lines are not counted', () async {
-      writePubspec();
-      // 600 comment lines + 100 code lines: only the 100 code lines count,
-      // which is under the default warning threshold of 500.
-      final buffer = StringBuffer();
-      for (var i = 0; i < 600; i++) {
-        buffer.writeln('// documentation line $i');
-      }
-      for (var i = 0; i < 100; i++) {
-        buffer.writeln('final v$i = $i;');
-      }
-      writeDart('documented.dart', buffer.toString());
-
-      expect(findingsOf(await run(), 'lines'), isEmpty);
-    });
-
-    test('a trailing comment after code still counts the line', () async {
-      writePubspec();
-      // 600 code lines, each with a trailing comment — all 600 count (> 500).
-      final buffer = StringBuffer();
-      for (var i = 0; i < 600; i++) {
-        buffer.writeln('final v$i = $i; // note $i');
-      }
-      writeDart('trailing.dart', buffer.toString());
-
-      final findings = findingsOf(await run(), 'lines').toList();
-      expect(findings, hasLength(1));
-      expect(findings.single.message, contains('600 lines'));
-    });
-
-    test('the finding message shows the accepted limit range', () async {
-      writePubspec();
-      writeDart('big.dart', fileWithLines(600)); // default 500 / 1000
-
-      final findings = findingsOf(await run(), 'lines').toList();
-      expect(findings.single.message, contains('limit: 500–1000'));
+      expect(findingsOf(await run(), 'File contains'), isEmpty);
     });
   });
 
-  // --- Rule 2: method length -------------------------------------------------
+  // --- File length: widget vs controller classification ----------------------
 
-  group('method length', () {
+  group('file classification', () {
+    test('a widget file is measured against the 250-line limit', () async {
+      writePubspec();
+      // 6 + 250 = 256 code lines: over the widget limit (250), under the
+      // generic/controller limit (300).
+      writeDart('big_widget.dart', widgetFile('BigWidget', padLines: 250));
+
+      final findings = findingsOf(await run(), 'Widget file contains').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.rule, 'widget_file_length');
+      expect(findings.single.message, contains('limit: 250'));
+    });
+
+    test('a widget file under 250 lines is not reported', () async {
+      writePubspec();
+      writeDart('ok_widget.dart', widgetFile('OkWidget', padLines: 100));
+      expect(findingsOf(await run(), 'Widget file contains'), isEmpty);
+    });
+
+    test('a *_controller.dart file uses the 300-line limit', () async {
+      writePubspec();
+      // 3 + 270 = 273 lines: over the widget limit (250) but under 300, so a
+      // controller must NOT be flagged (proves it is not treated as a widget).
+      writeDart('home_controller.dart',
+          plainClassFile('Home', padLines: 270));
+      expect((await run()).findings, isEmpty);
+    });
+
+    test('a *_controller.dart file over 300 lines is reported as a controller',
+        () async {
+      writePubspec();
+      writeDart('home_controller.dart',
+          plainClassFile('Home', padLines: 310));
+
+      final findings = findingsOf(await run(), 'Controller contains').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.rule, 'controller_length');
+      expect(findings.single.message, contains('limit: 300'));
+    });
+
+    test('a class extending a notifier is classified as a controller',
+        () async {
+      writePubspec();
+      writeDart('counter.dart',
+          plainClassFile('Counter', base: 'ChangeNotifier', padLines: 310));
+
+      expect(findingsOf(await run(), 'Controller contains'), hasLength(1));
+    });
+
+    test('a class named *Controller is classified as a controller', () async {
+      writePubspec();
+      writeDart('logic.dart',
+          plainClassFile('AuthController', padLines: 310));
+
+      expect(findingsOf(await run(), 'Controller contains'), hasLength(1));
+    });
+  });
+
+  // --- Method length (limit 30) ----------------------------------------------
+
+  group('method length (limit 30)', () {
     test('a long method is reported', () async {
       writePubspec();
-      writeDart('svc.dart', functionWithLines('generateMonthlyReport', 80));
+      writeDart('svc.dart', functionWithLines('generateMonthlyReport', 40));
 
       final findings =
           findingsOf(await run(), 'generateMonthlyReport()').toList();
       expect(findings, hasLength(1));
-      expect(findings.single.message, contains('Method generateMonthlyReport()'));
-      expect(findings.single.message, contains('limit: 50–100'));
-      expect(findings.single.severity, Severity.warning);
+      expect(findings.single.rule, 'method_length');
+      expect(findings.single.message, contains('limit: 30'));
     });
 
     test('getters, setters and constructors are ignored', () async {
       writePubspec();
-      final body = List.generate(80, (i) => '    var v$i = $i;').join('\n');
+      final body = List.generate(40, (i) => '    var v$i = $i;').join('\n');
       writeDart('model.dart', '''
 class Model {
   Model() {
@@ -179,18 +225,16 @@ $body
   }
 }
 ''');
-
-      // None of getter/setter/constructor should produce a method-length issue.
       expect(findingsOf(await run(), 'Method'), isEmpty);
     });
   });
 
-  // --- Rule 3: build() length ------------------------------------------------
+  // --- build() length (limit 60) ---------------------------------------------
 
-  group('build() length', () {
+  group('build() length (limit 60)', () {
     test('a long build() is reported as a build finding', () async {
       writePubspec();
-      final body = List.generate(120, (i) => '    final w$i = $i;').join('\n');
+      final body = List.generate(70, (i) => '    final w$i = $i;').join('\n');
       writeDart('page.dart', '''
 import 'package:flutter/material.dart';
 
@@ -208,73 +252,18 @@ $body
       final result = await run();
       final build = findingsOf(result, 'build() method').toList();
       expect(build, hasLength(1));
-      expect(build.single.message, contains('build() method contains'));
-      expect(build.single.severity, Severity.warning); // 100 < n < 200
-      // It must not also be reported as a generic "Method build()".
+      expect(build.single.rule, 'build_method_length');
+      expect(build.single.message, contains('limit: 60'));
+      // Not also reported as a generic "Method build()".
       expect(findingsOf(result, 'Method build()'), isEmpty);
     });
   });
 
-  // --- Rule 4: widget count --------------------------------------------------
+  // --- Nesting depth (limit 5) -----------------------------------------------
 
-  group('widget count', () {
-    String widgetClass(String name, String base) => '''
-class $name extends $base {
-  const $name({super.key});
-  @override
-  Widget build(BuildContext context) => const Placeholder();
-}
-''';
-
-    test('a file over the threshold is reported', () async {
-      writePubspec();
-      const bases = [
-        'StatelessWidget',
-        'ConsumerWidget',
-        'HookWidget',
-        'HookConsumerWidget',
-      ];
-      final buffer = StringBuffer("import 'package:flutter/material.dart';\n");
-      for (var i = 0; i < 11; i++) {
-        buffer.writeln(widgetClass('W$i', bases[i % bases.length]));
-      }
-      writeDart('dashboard_page.dart', buffer.toString());
-
-      final findings = findingsOf(await run(), 'widget classes').toList();
-      expect(findings, hasLength(1));
-      expect(findings.single.message, contains('11 widget classes'));
-    });
-
-    test('a file below the threshold is not reported', () async {
-      writePubspec();
-      final buffer = StringBuffer("import 'package:flutter/material.dart';\n");
-      for (var i = 0; i < 9; i++) {
-        buffer.writeln(widgetClass('W$i', 'StatelessWidget'));
-      }
-      writeDart('ok.dart', buffer.toString());
-
-      expect(findingsOf(await run(), 'widget classes'), isEmpty);
-    });
-
-    test('exactly at the threshold is reported (inclusive)', () async {
-      writePubspec();
-      final buffer = StringBuffer("import 'package:flutter/material.dart';\n");
-      for (var i = 0; i < 10; i++) {
-        buffer.writeln(widgetClass('W$i', 'StatelessWidget'));
-      }
-      writeDart('boundary.dart', buffer.toString());
-
-      final findings = findingsOf(await run(), 'widget classes').toList();
-      expect(findings.single.severity, Severity.warning);
-    });
-  });
-
-  // --- Rule 5: nesting depth -------------------------------------------------
-
-  group('nesting depth', () {
+  group('nesting depth (limit 5)', () {
     test('a deeply nested widget tree is reported', () async {
       writePubspec();
-      // Column > Container > Card > Padding > Row > Expanded > Center > Text = 8.
       writeDart('deep.dart', '''
 import 'package:flutter/material.dart';
 
@@ -305,7 +294,10 @@ class Deep extends StatelessWidget {
 
       final findings = findingsOf(await run(), 'nesting depth').toList();
       expect(findings, hasLength(1));
-      expect(findings.single.message, contains('Maximum widget nesting depth is 8'));
+      expect(findings.single.rule, 'widget_nesting_depth');
+      expect(findings.single.message,
+          contains('Maximum widget nesting depth is 8'));
+      expect(findings.single.message, contains('limit: 5'));
     });
 
     test('a shallow tree is not reported', () async {
@@ -322,89 +314,116 @@ class Shallow extends StatelessWidget {
   }
 }
 ''');
-
       expect(findingsOf(await run(), 'nesting depth'), isEmpty);
     });
+  });
 
-    test('config objects (decorations, borders) do not inflate depth', () async {
+  // --- Public class count (limit 1) ------------------------------------------
+
+  group('public class count (limit 1)', () {
+    test('more than one public class is reported', () async {
       writePubspec();
-      // 4 real widget levels: Expanded > TextField ... and Container > Text.
-      // The InputDecoration/OutlineInputBorder/BoxDecoration wrappers must not
-      // count, so this stays under the default warning threshold of 6.
-      writeDart('field.dart', '''
+      writeDart('two.dart', 'class Foo {}\nclass Bar {}\n');
+
+      final findings =
+          findingsOf(await run(), 'public classes').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.rule, 'public_class_count');
+      expect(findings.single.message, contains('2 public classes'));
+      expect(findings.single.message, contains('limit: 1'));
+    });
+
+    test('one public class plus private classes is allowed', () async {
+      writePubspec();
+      writeDart('one.dart', 'class Foo {}\nclass _Bar {}\nclass _Baz {}\n');
+      expect(findingsOf(await run(), 'public classes'), isEmpty);
+    });
+
+    test('a StatefulWidget with its private State passes', () async {
+      writePubspec();
+      writeDart('sw.dart', '''
 import 'package:flutter/material.dart';
 
-class Field extends StatelessWidget {
-  const Field({super.key});
-
+class Foo extends StatefulWidget {
+  const Foo({super.key});
   @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(
-        child: TextField(
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
-      ),
-      Container(
-        decoration: BoxDecoration(
-          border: Border.all(),
-          boxShadow: [BoxShadow(color: Colors.black)],
-        ),
-        child: Text('hi'),
-      ),
-    ]);
-  }
+  State<Foo> createState() => _FooState();
+}
+
+class _FooState extends State<Foo> {
+  @override
+  Widget build(BuildContext context) => const Placeholder();
 }
 ''');
+      expect(findingsOf(await run(), 'public classes'), isEmpty);
+    });
+  });
 
-      expect(findingsOf(await run(), 'nesting depth'), isEmpty);
+  // --- Constructor params (limit 8) ------------------------------------------
+
+  group('constructor params (limit 8)', () {
+    String classWithParams(String name, int params) {
+      final ps = List.generate(params, (i) => 'this.p$i').join(', ');
+      final fields =
+          List.generate(params, (i) => '  final int p$i;').join('\n');
+      return 'class $name {\n  $name($ps);\n$fields\n}\n';
+    }
+
+    test('a constructor with more than 8 params is reported', () async {
+      writePubspec();
+      writeDart('wide.dart', classWithParams('Wide', 9));
+
+      final findings =
+          findingsOf(await run(), 'parameters').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.rule, 'constructor_params');
+      expect(findings.single.message, contains('Constructor Wide has 9'));
+      expect(findings.single.message, contains('limit: 8'));
     });
 
-    test('deep trees are still reported once config wrappers are excluded',
+    test('a constructor with exactly 8 params is allowed', () async {
+      writePubspec();
+      writeDart('ok.dart', classWithParams('Ok', 8));
+      expect(findingsOf(await run(), 'parameters'), isEmpty);
+    });
+  });
+
+  // --- Folder file count (limit 15) ------------------------------------------
+
+  group('folder file count (limit 15)', () {
+    test('a folder with more than 15 Dart files is reported', () async {
+      writePubspec();
+      for (var i = 0; i < 16; i++) {
+        writeDart('widgets/w$i.dart', 'final x$i = $i;\n');
+      }
+
+      final findings = findingsOf(await run(), 'Dart files').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.rule, 'folder_file_count');
+      expect(findings.single.path, 'lib/widgets');
+      expect(findings.single.message, contains('16 Dart files'));
+      expect(findings.single.line, isNull);
+    });
+
+    test('a folder with exactly 15 Dart files is allowed', () async {
+      writePubspec();
+      for (var i = 0; i < 15; i++) {
+        writeDart('widgets/w$i.dart', 'final x$i = $i;\n');
+      }
+      expect(findingsOf(await run(), 'Dart files'), isEmpty);
+    });
+
+    test('ignored/generated files do not count toward the folder total',
         () async {
       writePubspec();
-      // 8 real widget levels wrapping a decorated Container — the decoration
-      // and border must not push it to 9, but 8 still exceeds the default
-      // warning of 6.
-      writeDart('deep_field.dart', '''
-import 'package:flutter/material.dart';
-
-class DeepField extends StatelessWidget {
-  const DeepField({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      Center(
-        child: Padding(
-          padding: EdgeInsets.all(8),
-          child: Card(
-            child: Row(children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(),
-                  ),
-                  child: Text('hi'),
-                ),
-              ),
-            ]),
-          ),
-        ),
-      ),
-    ]);
-  }
-}
-''');
-
-      final findings = findingsOf(await run(), 'nesting depth').toList();
-      expect(findings, hasLength(1));
-      expect(
-          findings.single.message, contains('Maximum widget nesting depth is 8'));
+      for (var i = 0; i < 15; i++) {
+        writeDart('widgets/w$i.dart', 'final x$i = $i;\n');
+      }
+      // Two extra generated files would push the raw count to 17, but they are
+      // excluded, so the folder stays at 15 and is not flagged.
+      writeDart('widgets/w.g.dart', 'final g = 0;\n');
+      writeDart('widgets/w.freezed.dart', 'final f = 0;\n');
+      expect(findingsOf(await run(), 'Dart files'), isEmpty);
     });
   });
 
@@ -414,7 +433,6 @@ class DeepField extends StatelessWidget {
     test('default-ignored *.g.dart files are skipped', () async {
       writePubspec();
       writeDart('model.g.dart', fileWithLines(2000));
-
       expect((await run()).findings, isEmpty);
     });
 
@@ -423,7 +441,6 @@ class DeepField extends StatelessWidget {
       writePubspec();
       writeDart('injection.config.dart', fileWithLines(2000));
       writeDart('service.pbserver.dart', fileWithLines(2000));
-
       expect((await run()).findings, isEmpty);
     });
 
@@ -431,38 +448,7 @@ class DeepField extends StatelessWidget {
       writePubspec();
       writeConfig('ignore:\n  - "lib/legacy/**"\n');
       writeDart('legacy/old.dart', fileWithLines(2000));
-
       expect((await run()).findings, isEmpty);
-    });
-  });
-
-  // --- Threshold boundaries --------------------------------------------------
-
-  group('threshold boundaries', () {
-    test('value exactly at warning emits a warning', () async {
-      writePubspec();
-      writeConfig('maintainability:\n  file_lines: { warning: 50, error: 100 }\n');
-      writeDart('exact.dart', fileWithLines(50));
-
-      final findings = findingsOf(await run(), 'lines').toList();
-      expect(findings.single.severity, Severity.warning);
-    });
-
-    test('one below warning emits nothing', () async {
-      writePubspec();
-      writeConfig('maintainability:\n  file_lines: { warning: 50, error: 100 }\n');
-      writeDart('below.dart', fileWithLines(49));
-
-      expect(findingsOf(await run(), 'lines'), isEmpty);
-    });
-
-    test('value exactly at error emits an error', () async {
-      writePubspec();
-      writeConfig('maintainability:\n  file_lines: { warning: 50, error: 100 }\n');
-      writeDart('err.dart', fileWithLines(100));
-
-      final findings = findingsOf(await run(), 'lines').toList();
-      expect(findings.single.severity, Severity.error);
     });
   });
 
@@ -479,25 +465,25 @@ class DeepField extends StatelessWidget {
       expect(result.findings, isEmpty);
     });
 
-    test('custom lower threshold is honored', () async {
+    test('a custom lower limit is honored', () async {
       writePubspec();
-      writeConfig('maintainability:\n  file_lines: { warning: 80, error: 160 }\n');
-      writeDart('mid.dart', fileWithLines(100)); // under default 500, over 80
+      writeConfig('maintainability:\n  file_lines: 80\n');
+      writeDart('mid.dart', fileWithLines(100)); // under default 300, over 80
 
-      final findings = findingsOf(await run(), 'lines').toList();
-      expect(findings.single.severity, Severity.warning);
+      final findings = findingsOf(await run(), 'File contains').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.message, contains('limit: 80'));
     });
   });
 
   // --- Finding shape ---------------------------------------------------------
 
-  test('findings carry the maintainability rule and forward-slash paths',
-      () async {
+  test('findings carry a per-metric rule and forward-slash paths', () async {
     writePubspec();
     writeDart('features/home/big.dart', fileWithLines(600));
 
     final finding = (await run()).findings.first;
-    expect(finding.rule, 'maintainability');
+    expect(finding.rule, 'file_length');
     expect(finding.path, 'lib/features/home/big.dart');
     expect(finding.path, isNot(contains(r'\')));
     expect(finding.recommendation, isNotNull);

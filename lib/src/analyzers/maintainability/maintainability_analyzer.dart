@@ -19,25 +19,29 @@ import 'utils/nesting_depth_calculator.dart';
 
 /// Flags maintainability smells in non-generated Dart files under `lib/`.
 ///
-/// Five metrics are measured against configurable thresholds
-/// ([MaintainabilityConfig]):
-/// 1. file length (lines of code, excluding comment-only and blank lines),
+/// Every metric is measured against a single accepted maximum
+/// ([MaintainabilityConfig]); a value *strictly greater than* the limit is
+/// reported as a `warning`:
+/// 1. file length — lines of code, with the applicable limit chosen by
+///    classifying the file as a controller, a widget file, or a generic file,
 /// 2. method length (any `FunctionDeclaration`/`MethodDeclaration` except
 ///    getters, setters, constructors and `build`),
 /// 3. `build()` method length,
-/// 4. widget classes per file, and
-/// 5. maximum widget-tree nesting depth.
+/// 4. maximum widget-tree nesting depth,
+/// 5. public top-level class count per file,
+/// 6. constructor parameter count, and
+/// 7. Dart files directly inside each folder under `lib/`.
 ///
-/// Each file is parsed exactly once and all five rules run over that single
+/// Each file is parsed exactly once and all per-file rules run over that single
 /// [CompilationUnit], so the analyzer scales to large projects. Analysis is
-/// purely syntactic (no element resolution) — widget detection and nesting are
-/// practical AST approximations, consistent with [DuplicateWidgetsAnalyzer].
+/// purely syntactic (no element resolution) — widget/controller detection and
+/// nesting are practical AST approximations, consistent with
+/// [DuplicateWidgetsAnalyzer].
 class MaintainabilityAnalyzer implements Analyzer {
   const MaintainabilityAnalyzer();
 
-  static const String rule = MaintainabilityIssue.rule;
-
-  /// Widget base classes that make a [ClassDeclaration] count as a widget.
+  /// Widget base classes that make a [ClassDeclaration] count as a widget (and
+  /// its file a "widget file").
   static const Set<String> _widgetSuperclasses = {
     'StatelessWidget',
     'StatefulWidget',
@@ -45,6 +49,21 @@ class MaintainabilityAnalyzer implements Analyzer {
     'HookWidget',
     'HookConsumerWidget',
     'ConsumerStatefulWidget',
+  };
+
+  /// Base classes that make a [ClassDeclaration] count as a controller (and its
+  /// file a "controller"). A class whose name ends in `Controller`, or a file
+  /// named `*_controller.dart`, also classifies as a controller.
+  static const Set<String> _controllerSuperclasses = {
+    'ChangeNotifier',
+    'StateNotifier',
+    'Notifier',
+    'AsyncNotifier',
+    'AutoDisposeNotifier',
+    'AutoDisposeAsyncNotifier',
+    'GetxController',
+    'Cubit',
+    'Bloc',
   };
 
   /// Generated-file suffixes skipped in addition to [IgnoreService] patterns.
@@ -76,10 +95,17 @@ class MaintainabilityAnalyzer implements Analyzer {
     final ignore = IgnoreService.forProject(paths.root);
 
     final findings = <Finding>[];
+    // Dart files that pass the ignore/generated filters, counted per parent
+    // folder for the folder-size rule.
+    final folderFileCounts = <String, int>{};
+
     for (final entity in libDir.listSync(recursive: true)) {
       if (entity is! File || p.extension(entity.path) != '.dart') continue;
       final relPath = toPosixRelative(paths.root, entity.path);
       if (ignore.isIgnored(relPath) || _isGenerated(relPath)) continue;
+
+      final folder = p.url.dirname(relPath);
+      folderFileCounts[folder] = (folderFileCounts[folder] ?? 0) + 1;
 
       final String source;
       try {
@@ -88,10 +114,21 @@ class MaintainabilityAnalyzer implements Analyzer {
         continue;
       }
 
-      for (final issue in _analyzeFile(source, config)) {
+      for (final issue in _analyzeFile(source, relPath, config)) {
         findings.add(issue.toFinding(relPath));
       }
     }
+
+    // Folder-size rule (analyzer level, not AST).
+    folderFileCounts.forEach((folder, count) {
+      if (count > config.folderFiles) {
+        findings.add(MaintainabilityIssue(
+          kind: MaintainabilityIssueKind.folderFileCount,
+          value: count,
+          limit: config.folderFiles,
+        ).toFinding(folder));
+      }
+    });
 
     // Deterministic output: by path, then by line (file-level findings first).
     findings.sort((a, b) {
@@ -105,7 +142,7 @@ class MaintainabilityAnalyzer implements Analyzer {
 
   /// Parses [source] once and collects every maintainability issue in it.
   List<MaintainabilityIssue> _analyzeFile(
-      String source, MaintainabilityConfig config) {
+      String source, String relPath, MaintainabilityConfig config) {
     final CompilationUnit unit;
     final LineInfo lineInfo;
     try {
@@ -118,66 +155,58 @@ class MaintainabilityAnalyzer implements Analyzer {
 
     final issues = <MaintainabilityIssue>[];
 
-    // Rule 1: file length (lines of code, excluding comment-only/blank lines).
-    _addIfOverThreshold(
-      issues,
-      kind: MaintainabilityIssueKind.fileLength,
-      value: _codeLineCount(unit, lineInfo),
-      threshold: config.fileLines,
-    );
-
-    // Rules 2–5 walk the single parsed unit.
+    // Rules 2–6 walk the single parsed unit.
     final visitor = _FileVisitor(lineInfo, config);
     unit.accept(visitor);
     issues.addAll(visitor.issues);
 
-    // Rule 4: widget count (file-level).
-    _addIfOverThreshold(
+    // Rule 1: file length. The limit and issue kind depend on how the file is
+    // classified from the classes it declares (and its name).
+    final fileClass = visitor.classify(relPath);
+    _addIfOverLimit(
       issues,
-      kind: MaintainabilityIssueKind.widgetCount,
-      value: visitor.widgetClassCount,
-      threshold: config.widgetCount,
+      kind: fileClass.kind,
+      value: _codeLineCount(unit, lineInfo),
+      limit: fileClass.limit(config),
     );
 
-    // Rule 5: maximum widget nesting depth across all build() bodies.
-    _addIfOverThreshold(
+    // Rule 4: maximum widget nesting depth across all build() bodies.
+    _addIfOverLimit(
       issues,
       kind: MaintainabilityIssueKind.nestingDepth,
       value: visitor.maxNestingDepth,
-      threshold: config.widgetNestingDepth,
+      limit: config.widgetNestingDepth,
       line: visitor.maxNestingLine,
+    );
+
+    // Rule 5: public top-level class count (file-level).
+    _addIfOverLimit(
+      issues,
+      kind: MaintainabilityIssueKind.publicClassCount,
+      value: visitor.publicClassCount,
+      limit: config.maxPublicClasses,
     );
 
     return issues;
   }
 
-  /// Appends a [kind] issue when [value] crosses [threshold]'s warning/error
-  /// bound; below warning produces nothing.
-  static void _addIfOverThreshold(
+  /// Appends a [kind] issue when [value] is strictly greater than [limit].
+  static void _addIfOverLimit(
     List<MaintainabilityIssue> issues, {
     required MaintainabilityIssueKind kind,
     required int value,
-    required Threshold threshold,
+    required int limit,
     String? subject,
     int? line,
   }) {
-    final severity = severityFor(value, threshold);
-    if (severity == null) return;
+    if (value <= limit) return;
     issues.add(MaintainabilityIssue(
       kind: kind,
-      severity: severity,
       value: value,
-      threshold: threshold,
+      limit: limit,
       subject: subject,
       line: line,
     ));
-  }
-
-  /// Maps a measured [value] to a severity, or null when below the warning bound.
-  static Severity? severityFor(int value, Threshold threshold) {
-    if (value >= threshold.error) return Severity.error;
-    if (value >= threshold.warning) return Severity.warning;
-    return null;
   }
 
   /// Counts distinct source lines that contain at least one real code token.
@@ -207,8 +236,32 @@ class MaintainabilityAnalyzer implements Analyzer {
       _generatedSuffixes.any(relPath.endsWith);
 }
 
-/// Walks a parsed file, emitting method/build issues and accumulating the
-/// file-level widget count and maximum nesting depth in one pass.
+/// How a file's overall line-length limit is chosen. Precedence is
+/// controller → widget → generic file.
+enum _FileClass {
+  controller(MaintainabilityIssueKind.controllerLength),
+  widget(MaintainabilityIssueKind.widgetFileLength),
+  other(MaintainabilityIssueKind.fileLength);
+
+  const _FileClass(this.kind);
+
+  final MaintainabilityIssueKind kind;
+
+  int limit(MaintainabilityConfig config) {
+    switch (this) {
+      case _FileClass.controller:
+        return config.controllerLines;
+      case _FileClass.widget:
+        return config.widgetFileLines;
+      case _FileClass.other:
+        return config.fileLines;
+    }
+  }
+}
+
+/// Walks a parsed file, emitting method/build/constructor issues and
+/// accumulating file-level signals (widget/controller detection, public-class
+/// count, maximum nesting depth) in one pass.
 class _FileVisitor extends RecursiveAstVisitor<void> {
   _FileVisitor(this._lineInfo, this._config);
 
@@ -217,18 +270,61 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
   static const NestingDepthCalculator _nesting = NestingDepthCalculator();
 
   final List<MaintainabilityIssue> issues = [];
-  int widgetClassCount = 0;
+  int publicClassCount = 0;
   int maxNestingDepth = 0;
   int? maxNestingLine;
+  bool _hasWidgetClass = false;
+  bool _hasControllerClass = false;
+
+  /// Classifies the whole file (for the file-length rule) from the classes seen
+  /// during the walk plus its [relPath]. Precedence: controller → widget →
+  /// generic file.
+  _FileClass classify(String relPath) {
+    final fileName = p.url.basename(relPath);
+    if (_hasControllerClass || fileName.endsWith('_controller.dart')) {
+      return _FileClass.controller;
+    }
+    if (_hasWidgetClass) return _FileClass.widget;
+    return _FileClass.other;
+  }
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
+    final className = node.namePart.typeName.lexeme;
+    if (!className.startsWith('_')) publicClassCount++;
+
     final superName = node.extendsClause?.superclass.name.lexeme;
     if (superName != null &&
         MaintainabilityAnalyzer._widgetSuperclasses.contains(superName)) {
-      widgetClassCount++;
+      _hasWidgetClass = true;
+    }
+    if (className.endsWith('Controller') ||
+        (superName != null &&
+            MaintainabilityAnalyzer._controllerSuperclasses
+                .contains(superName))) {
+      _hasControllerClass = true;
     }
     super.visitClassDeclaration(node);
+  }
+
+  @override
+  void visitConstructorDeclaration(ConstructorDeclaration node) {
+    // Rule 6: constructor parameter count.
+    final count = node.parameters.parameters.length;
+    final owner =
+        node.thisOrAncestorOfType<ClassDeclaration>()?.namePart.typeName.lexeme ??
+            node.typeName?.name ??
+            '<constructor>';
+    final label = node.name == null ? owner : '$owner.${node.name!.lexeme}';
+    MaintainabilityAnalyzer._addIfOverLimit(
+      issues,
+      kind: MaintainabilityIssueKind.constructorParams,
+      value: count,
+      limit: _config.constructorParams,
+      subject: label,
+      line: _lineOf(node.offset),
+    );
+    super.visitConstructorDeclaration(node);
   }
 
   @override
@@ -240,14 +336,14 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
 
     if (_isBuildMethod(node)) {
       // Rule 3: build() body length.
-      MaintainabilityAnalyzer._addIfOverThreshold(
+      MaintainabilityAnalyzer._addIfOverLimit(
         issues,
         kind: MaintainabilityIssueKind.buildMethodLength,
         value: _lineSpan(node.body),
-        threshold: _config.buildMethodLines,
+        limit: _config.buildMethodLines,
         line: _lineOf(node.offset),
       );
-      // Rule 5: nesting depth of this build() body.
+      // Rule 4: nesting depth of this build() body.
       final depth = _nesting.maxDepth(node.body);
       if (depth > maxNestingDepth) {
         maxNestingDepth = depth;
@@ -255,11 +351,11 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
       }
     } else {
       // Rule 2: method length.
-      MaintainabilityAnalyzer._addIfOverThreshold(
+      MaintainabilityAnalyzer._addIfOverLimit(
         issues,
         kind: MaintainabilityIssueKind.methodLength,
         value: _lineSpan(node),
-        threshold: _config.methodLines,
+        limit: _config.methodLines,
         subject: node.name.lexeme,
         line: _lineOf(node.offset),
       );
@@ -271,11 +367,11 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
   void visitFunctionDeclaration(FunctionDeclaration node) {
     if (!node.isGetter && !node.isSetter) {
       // Rule 2: top-level / local function length.
-      MaintainabilityAnalyzer._addIfOverThreshold(
+      MaintainabilityAnalyzer._addIfOverLimit(
         issues,
         kind: MaintainabilityIssueKind.methodLength,
         value: _lineSpan(node),
-        threshold: _config.methodLines,
+        limit: _config.methodLines,
         subject: node.name.lexeme,
         line: _lineOf(node.offset),
       );
@@ -294,8 +390,7 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
   }
 
   /// Inclusive source-line span of [node].
-  int _lineSpan(AstNode node) =>
-      _lineOf(node.end) - _lineOf(node.offset) + 1;
+  int _lineSpan(AstNode node) => _lineOf(node.end) - _lineOf(node.offset) + 1;
 
   int _lineOf(int offset) => _lineInfo.getLocation(offset).lineNumber;
 }

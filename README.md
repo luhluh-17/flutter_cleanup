@@ -366,21 +366,26 @@ structure warnings (ARCH210–212) for the named folders — the layer/purity ru
 still apply. Parsing is tolerant: a missing section, wrong types, or unknown keys
 are ignored.
 
-#### Maintainability thresholds
+#### Maintainability limits
 
-The `maintainability` analyzer's thresholds are tunable from the same
-`.flutter_cleanup.yaml`. Every value defaults to the table in
-[`maintainability`](#maintainability); override only what you need (a partial
-`{ warning: … }` keeps the matching default `error`):
+The `maintainability` analyzer's limits are tunable from the same
+`.flutter_cleanup.yaml`. Each metric is a single **maximum** (an accepted
+standard): a value at or below the limit is fine, above it is reported. Every
+value defaults to the table in [`maintainability`](#maintainability); override
+only what you need (unset keys keep their default):
 
 ```yaml
 maintainability:
-  enabled: true                              # set false to skip the analyzer
-  file_lines:           { warning: 500,  error: 1000 }
-  method_lines:         { warning: 50,   error: 100 }
-  build_method_lines:   { warning: 100,  error: 200 }
-  widget_count:         { warning: 10,   error: 20 }
-  widget_nesting_depth: { warning: 6,    error: 10 }
+  enabled: true            # set false to skip the analyzer
+  widget_file_lines:  250  # file that declares a widget class
+  controller_lines:   300  # file classified as a controller
+  file_lines:         300  # generic fallback (neither widget nor controller)
+  build_method_lines:  60
+  method_lines:        30
+  widget_nesting_depth: 5
+  max_public_classes:   1
+  constructor_params:   8
+  folder_files:        15
 ```
 
 Parsing is tolerant (mirrors the rest of the config): a missing section,
@@ -401,52 +406,76 @@ surfaced as `"analysisMode": "syntactic-ast"` in the JSON.
 ### `maintainability`
 
 Flags **maintainability smells** in non-generated Dart files under `lib/` —
-files, methods, and widget trees that have grown large enough to be worth
-refactoring. Each file is parsed once with the `analyzer` package and all five
-rules run over that single AST, so the command scales to large projects.
+files, methods, widget trees, classes, and folders that have grown large enough
+to be worth refactoring. Each file is parsed once with the `analyzer` package and
+all per-file rules run over that single AST, so the command scales to large
+projects.
 
 ```bash
 dart run flutter_cleanup maintainability --path ../my_app
 ```
 
-**Rules** (each compared against a configurable warning/error threshold):
+Every metric is a single **accepted maximum**: a measured value at or below the
+limit is fine, and a value *above* it is reported at `warning` severity with an
+actionable recommendation. The rules and their default limits:
 
-| Rule | Measures | Default warning / error |
-| --- | --- | --- |
-| File length | Lines of code in the file (comment-only and blank lines excluded) | 500 / 1000 |
-| Method length | Source lines of each function/method (getters, setters, constructors, and `build` excluded) | 50 / 100 |
-| `build()` length | Body length of a `Widget build(BuildContext)` method | 100 / 200 |
-| Widget count | Widget classes declared in one file (`StatelessWidget`, `StatefulWidget`, `ConsumerWidget`, `HookWidget`, `HookConsumerWidget`, `ConsumerStatefulWidget`) | 10 / 20 |
-| Widget nesting depth | Deepest widget-tree nesting inside a `build()` body (structural widgets only — decoration/border/constraint config objects like `InputDecoration`, `BoxDecoration`, `OutlineInputBorder` are not counted) | 6 / 10 |
+| Rule | `rule` id | Measures | Default limit |
+| --- | --- | --- | --- |
+| Widget file length | `widget_file_length` | Lines of code in a file that declares a widget class | ≤ 250 |
+| Controller length | `controller_length` | Lines of code in a file classified as a controller | ≤ 300 |
+| File length | `file_length` | Lines of code in any other file (comment-only and blank lines excluded) | ≤ 300 |
+| `build()` length | `build_method_length` | Body length of a `Widget build(BuildContext)` method | ≤ 60 |
+| Method length | `method_length` | Source lines of each function/method (getters, setters, constructors, and `build` excluded) | ≤ 30 |
+| Widget nesting depth | `widget_nesting_depth` | Deepest widget-tree nesting inside a `build()` body (structural widgets only — decoration/border/constraint config objects like `InputDecoration`, `BoxDecoration`, `OutlineInputBorder` are not counted) | ≤ 5 |
+| Public class count | `public_class_count` | Public (non-`_`) top-level classes declared in one file | ≤ 1 |
+| Constructor params | `constructor_params` | Parameters on any single constructor | ≤ 8 |
+| Folder file count | `folder_file_count` | Dart files directly inside a folder under `lib/` (non-recursive; ignored/generated files excluded) | ≤ 15 |
 
-A measured value at or above the **error** threshold is reported at `error`
-severity, at or above **warning** as `warning`, and below warning produces no
-finding. Each finding shows the accepted `warning–error` limit range and carries
-an actionable recommendation. An **Accepted standards** legend of the active
-thresholds is printed above the findings on every text-mode run:
+**File classification.** The file-length limit depends on what a file is, chosen
+with precedence **controller → widget → generic file**. A file is a *controller*
+when it is named `*_controller.dart`, declares a class whose name ends in
+`Controller`, or declares a class extending a controller base (`ChangeNotifier`,
+`StateNotifier`, `Notifier`, `AsyncNotifier`, `AutoDisposeNotifier`,
+`AutoDisposeAsyncNotifier`, `GetxController`, `Cubit`, `Bloc`). It is a *widget
+file* when it declares a widget class (`StatelessWidget`, `StatefulWidget`,
+`ConsumerWidget`, `HookWidget`, `HookConsumerWidget`, `ConsumerStatefulWidget`).
+Otherwise the generic `file_lines` limit applies.
+
+Findings are **grouped by metric** in the text report, each under a sub-heading
+showing its limit. An **Accepted standards** legend of the active limits is
+printed above the findings on every text-mode run:
 
 ```text
-Accepted standards (warning / error)
-────────────────────────────────────
-  File length      500 / 1000 lines
-  Method length     50 / 100 lines
-  build() length   100 / 200 lines
-  Widget count      10 / 20 classes
-  Nesting depth      6 / 10 levels
+Accepted standards (limit)
+──────────────────────────
+  Folder               ≤ 15 files
+  Public classes       ≤ 1 per file
+  Widget file          ≤ 250 lines
+  Controller           ≤ 300 lines
+  File                 ≤ 300 lines
+  build()              ≤ 60 lines
+  Method               ≤ 30 lines
+  Constructor params   ≤ 8 params
+  Widget nesting       ≤ 5 levels
 
 Maintainability
 ───────────────
-! lib/features/home/home_page.dart — File contains 742 lines (limit: 500–1000).
-    ↳ Split into smaller widgets or feature-specific files.
-! lib/features/home/home_page.dart:88 — build() method contains 156 lines (limit: 100–200).
-    ↳ Extract reusable widgets.
-! lib/dashboard/dashboard_page.dart — File contains 14 widget classes (limit: 10–20).
-    ↳ Move widgets into separate files.
+Folder (≤ 15 files)
+!   lib/widgets — Folder contains 22 Dart files (limit: 15).
+      ↳ Split into sub-folders.
+
+Widget file (≤ 250 lines)
+!   lib/features/home/home_page.dart — Widget file contains 312 lines (limit: 250).
+      ↳ Split into smaller widgets or feature-specific files.
+
+build() (≤ 60 lines)
+!   lib/features/home/home_page.dart:88 — build() method contains 156 lines (limit: 60).
+      ↳ Extract reusable widgets.
 ```
 
-**Configuration.** Thresholds are tunable (and the analyzer can be disabled
+**Configuration.** Limits are tunable (and the analyzer can be disabled
 entirely) from `.flutter_cleanup.yaml` — see
-[Maintainability thresholds](#maintainability-thresholds).
+[Maintainability limits](#maintainability-limits).
 
 **Known limitations:**
 

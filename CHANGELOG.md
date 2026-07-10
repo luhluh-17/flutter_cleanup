@@ -1,5 +1,24 @@
 ## Unreleased
 
+- `maintainability`: **retuned to a single accepted-standard limit per metric**
+  (was a `warning`/`error` pair). A value at or below the limit passes; above it
+  is reported as a `warning`. New defaults: widget file ≤ 250 lines, controller
+  ≤ 300, generic file ≤ 300, `build()` ≤ 60, method ≤ 30, widget nesting ≤ 5,
+  public classes ≤ 1 per file, constructor params ≤ 8, and folder ≤ 15 Dart
+  files. The file-length limit is chosen by **classifying** each file as a
+  controller (`*_controller.dart`, a `*Controller` class, or a class extending
+  `ChangeNotifier`/`StateNotifier`/`Notifier`/`Cubit`/`Bloc`/… ), a widget file,
+  or a generic file. The **widget-count** metric is replaced by a **public-class
+  count** (max one public top-level class per file), and two metrics are new:
+  **constructor parameter count** and **folder file count**. Findings are now
+  **grouped by metric** in the text report, each under a sub-heading showing its
+  limit, and every finding carries a metric-specific `rule` id
+  (`widget_file_length`, `controller_length`, `file_length`,
+  `build_method_length`, `method_length`, `widget_nesting_depth`,
+  `public_class_count`, `constructor_params`, `folder_file_count`) instead of the
+  shared `maintainability`. Config keys change accordingly — each is now a single
+  integer (e.g. `method_lines: 30`) rather than `{ warning, error }`; see
+  [Maintainability limits](README.md#maintainability-limits).
 - `maintainability`: widget nesting depth no longer counts decoration, border,
   constraint and gradient config objects as tree levels. `InputDecoration`,
   `BoxDecoration`, `ShapeDecoration`, `BoxConstraints`, `BoxShadow`, the

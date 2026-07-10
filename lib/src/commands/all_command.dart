@@ -5,6 +5,7 @@ import '../analysis/analyzer.dart';
 import '../analyzers/duplicate_code_analyzer.dart';
 import '../analyzers/duplicate_widgets_analyzer.dart';
 import '../analyzers/maintainability/maintainability_analyzer.dart';
+import '../analyzers/maintainability/maintainability_config.dart';
 import '../analyzers/primary_constructors/primary_constructors_analyzer.dart';
 import '../analyzers/unused_assets_analyzer.dart';
 import '../analyzers/unused_files_analyzer.dart';
@@ -147,11 +148,21 @@ class AllCommand extends FlutterCleanupCommand {
       }
 
       final result = await section.analyzer.analyze(paths);
-      printer.findings(
-        result,
-        title: section.title,
-        itemNoun: section.itemNoun,
-      );
+      if (identical(section.analyzer, _maintainability)) {
+        // Maintainability groups its findings by metric category, so it uses a
+        // dedicated renderer (with the active thresholds) instead of the flat
+        // per-section list every other analyzer shares.
+        printer.maintainabilityFindings(
+          result,
+          MaintainabilityConfig.forProject(paths.root),
+        );
+      } else {
+        printer.findings(
+          result,
+          title: section.title,
+          itemNoun: section.itemNoun,
+        );
+      }
     }
 
     return 0;

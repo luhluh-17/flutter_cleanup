@@ -26,22 +26,25 @@ void main() {
   test('absent config file yields all defaults', () {
     final config = load();
     expect(config.enabled, isTrue);
-    expect(config.fileLines.warning, 500);
-    expect(config.fileLines.error, 1000);
-    expect(config.methodLines.warning, 50);
-    expect(config.buildMethodLines.error, 200);
-    expect(config.widgetCount.warning, 10);
-    expect(config.widgetNestingDepth.error, 10);
+    expect(config.widgetFileLines, 250);
+    expect(config.controllerLines, 300);
+    expect(config.fileLines, 300);
+    expect(config.buildMethodLines, 60);
+    expect(config.methodLines, 30);
+    expect(config.widgetNestingDepth, 5);
+    expect(config.maxPublicClasses, 1);
+    expect(config.constructorParams, 8);
+    expect(config.folderFiles, 15);
   });
 
   test('absent maintainability section yields defaults', () {
     writeConfig('architecture:\n  top_level: [config]\n');
-    expect(load().fileLines.warning, 500);
+    expect(load().widgetFileLines, 250);
   });
 
   test('malformed YAML falls back to defaults', () {
     writeConfig('maintainability: : : not valid');
-    expect(load().fileLines.warning, 500);
+    expect(load().widgetFileLines, 250);
   });
 
   test('enabled flag is parsed', () {
@@ -52,32 +55,39 @@ void main() {
   test('full override is applied', () {
     writeConfig('''
 maintainability:
-  file_lines: { warning: 200, error: 400 }
-  method_lines: { warning: 30, error: 60 }
-  build_method_lines: { warning: 80, error: 160 }
-  widget_count: { warning: 5, error: 12 }
-  widget_nesting_depth: { warning: 4, error: 8 }
+  widget_file_lines: 200
+  controller_lines: 250
+  file_lines: 220
+  build_method_lines: 40
+  method_lines: 20
+  widget_nesting_depth: 4
+  max_public_classes: 2
+  constructor_params: 6
+  folder_files: 10
 ''');
     final config = load();
-    expect(config.fileLines.warning, 200);
-    expect(config.fileLines.error, 400);
-    expect(config.methodLines.warning, 30);
-    expect(config.buildMethodLines.warning, 80);
-    expect(config.widgetCount.error, 12);
-    expect(config.widgetNestingDepth.warning, 4);
+    expect(config.widgetFileLines, 200);
+    expect(config.controllerLines, 250);
+    expect(config.fileLines, 220);
+    expect(config.buildMethodLines, 40);
+    expect(config.methodLines, 20);
+    expect(config.widgetNestingDepth, 4);
+    expect(config.maxPublicClasses, 2);
+    expect(config.constructorParams, 6);
+    expect(config.folderFiles, 10);
   });
 
-  test('partial override keeps other bounds at their defaults', () {
-    // Only file_lines.warning is set; everything else stays default.
-    writeConfig('maintainability:\n  file_lines: { warning: 250 }\n');
+  test('partial override keeps other metrics at their defaults', () {
+    // Only method_lines is set; everything else stays default.
+    writeConfig('maintainability:\n  method_lines: 20\n');
     final config = load();
-    expect(config.fileLines.warning, 250);
-    expect(config.fileLines.error, 1000); // default preserved
-    expect(config.methodLines.warning, 50); // untouched metric stays default
+    expect(config.methodLines, 20);
+    expect(config.widgetFileLines, 250); // untouched metric stays default
+    expect(config.constructorParams, 8);
   });
 
   test('wrong-typed values fall back to defaults', () {
-    writeConfig('maintainability:\n  file_lines: { warning: "lots" }\n');
-    expect(load().fileLines.warning, 500);
+    writeConfig('maintainability:\n  method_lines: "lots"\n');
+    expect(load().methodLines, 30);
   });
 }

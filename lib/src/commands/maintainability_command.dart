@@ -58,14 +58,11 @@ class MaintainabilityCommand extends FlutterCleanupCommand {
 
     // Show the accepted-standards legend before the findings so users always
     // see the targets each metric is measured against (text mode only).
-    printer.maintainabilityThresholds(MaintainabilityConfig.forProject(paths.root));
+    final config = MaintainabilityConfig.forProject(paths.root);
+    printer.maintainabilityThresholds(config);
 
     final result = await _analyzer.analyze(paths);
-    printer.findings(
-      result,
-      title: 'Maintainability',
-      itemNoun: 'maintainability issue',
-    );
+    printer.maintainabilityFindings(result, config);
 
     return 0;
   }

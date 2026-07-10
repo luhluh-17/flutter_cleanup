@@ -3,46 +3,43 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
-/// A warning/error threshold pair for a single maintainability metric.
-///
-/// A measured value `>= error` maps to [Severity.error], `>= warning` (but below
-/// `error`) maps to [Severity.warning], and anything below `warning` produces no
-/// finding. Both bounds are inclusive lower bounds.
-class Threshold {
-  const Threshold({required this.warning, required this.error});
-
-  /// Smallest value that triggers a `warning` finding (inclusive).
-  final int warning;
-
-  /// Smallest value that triggers an `error` finding (inclusive).
-  final int error;
-}
-
-/// Project-specific thresholds for the [MaintainabilityAnalyzer], read from the
+/// Project-specific limits for the [MaintainabilityAnalyzer], read from the
 /// `maintainability:` section of `.flutter_cleanup.yaml`.
+///
+/// Every metric is a single **maximum** (an accepted standard): a measured value
+/// at or below the limit is fine, and a value *strictly greater than* the limit
+/// is reported. This mirrors how the standards are written ("≤ 250 lines").
 ///
 /// ```yaml
 /// maintainability:
 ///   enabled: true
-///   file_lines:           { warning: 500, error: 1000 }
-///   method_lines:         { warning: 50,  error: 100 }
-///   build_method_lines:   { warning: 100, error: 200 }
-///   widget_count:         { warning: 10,  error: 20 }
-///   widget_nesting_depth: { warning: 6,   error: 10 }
+///   widget_file_lines:    250   # file that declares a widget class
+///   controller_lines:     300   # file classified as a controller
+///   file_lines:           300   # generic fallback (neither widget nor controller)
+///   build_method_lines:    60
+///   method_lines:          30
+///   widget_nesting_depth:   5
+///   max_public_classes:     1
+///   constructor_params:     8
+///   folder_files:          15
 /// ```
 ///
 /// Parsing is tolerant (mirrors [ArchitectureConfig] / [IgnoreService]): a
 /// missing file/section, malformed YAML, or wrong types fall back to the
 /// per-field defaults below. Overrides are partial — setting only
-/// `file_lines.warning` keeps every other default intact.
+/// `method_lines` keeps every other default intact.
 class MaintainabilityConfig {
   const MaintainabilityConfig({
     this.enabled = true,
+    this.widgetFileLines = defaultWidgetFileLines,
+    this.controllerLines = defaultControllerLines,
     this.fileLines = defaultFileLines,
-    this.methodLines = defaultMethodLines,
     this.buildMethodLines = defaultBuildMethodLines,
-    this.widgetCount = defaultWidgetCount,
+    this.methodLines = defaultMethodLines,
     this.widgetNestingDepth = defaultWidgetNestingDepth,
+    this.maxPublicClasses = defaultMaxPublicClasses,
+    this.constructorParams = defaultConstructorParams,
+    this.folderFiles = defaultFolderFiles,
   });
 
   /// The all-defaults config used when no `maintainability:` section applies.
@@ -51,33 +48,47 @@ class MaintainabilityConfig {
   /// The config-file key (shared with [IgnoreService]).
   static const String configFileName = '.flutter_cleanup.yaml';
 
-  // Per-metric defaults (from the analyzer spec).
-  static const Threshold defaultFileLines = Threshold(warning: 500, error: 1000);
-  static const Threshold defaultMethodLines = Threshold(warning: 50, error: 100);
-  static const Threshold defaultBuildMethodLines =
-      Threshold(warning: 100, error: 200);
-  static const Threshold defaultWidgetCount = Threshold(warning: 10, error: 20);
-  static const Threshold defaultWidgetNestingDepth =
-      Threshold(warning: 6, error: 10);
+  // Per-metric defaults (the accepted-standards limits).
+  static const int defaultWidgetFileLines = 250;
+  static const int defaultControllerLines = 300;
+  static const int defaultFileLines = 300;
+  static const int defaultBuildMethodLines = 60;
+  static const int defaultMethodLines = 30;
+  static const int defaultWidgetNestingDepth = 5;
+  static const int defaultMaxPublicClasses = 1;
+  static const int defaultConstructorParams = 8;
+  static const int defaultFolderFiles = 15;
 
   /// Whether the analyzer runs at all. When false the analyzer returns no
   /// findings.
   final bool enabled;
 
-  /// Lines of code per file (comment-only and blank lines excluded).
-  final Threshold fileLines;
+  /// Max lines of code in a file that declares a widget class.
+  final int widgetFileLines;
 
-  /// Source lines per method/function (excluding `build`).
-  final Threshold methodLines;
+  /// Max lines of code in a file classified as a controller.
+  final int controllerLines;
 
-  /// Source lines of a `build(BuildContext)` method.
-  final Threshold buildMethodLines;
+  /// Max lines of code in a file that is neither a widget nor a controller.
+  final int fileLines;
 
-  /// Widget classes declared in a single file.
-  final Threshold widgetCount;
+  /// Max source lines of a `build(BuildContext)` method.
+  final int buildMethodLines;
 
-  /// Maximum widget-tree nesting depth within a `build` method.
-  final Threshold widgetNestingDepth;
+  /// Max source lines of any other method/function (excluding `build`).
+  final int methodLines;
+
+  /// Max widget-tree nesting depth within a `build` method.
+  final int widgetNestingDepth;
+
+  /// Max number of public top-level classes declared in a single file.
+  final int maxPublicClasses;
+
+  /// Max number of parameters on any single constructor.
+  final int constructorParams;
+
+  /// Max number of Dart files directly inside a single folder under `lib/`.
+  final int folderFiles;
 
   /// Loads the `maintainability:` section from `<root>/.flutter_cleanup.yaml`.
   ///
@@ -100,23 +111,21 @@ class MaintainabilityConfig {
 
     return MaintainabilityConfig(
       enabled: _readBool(section['enabled'], defaultValue: true),
-      fileLines: _readThreshold(section['file_lines'], defaultFileLines),
-      methodLines: _readThreshold(section['method_lines'], defaultMethodLines),
+      widgetFileLines:
+          _readInt(section['widget_file_lines'], defaultWidgetFileLines),
+      controllerLines:
+          _readInt(section['controller_lines'], defaultControllerLines),
+      fileLines: _readInt(section['file_lines'], defaultFileLines),
       buildMethodLines:
-          _readThreshold(section['build_method_lines'], defaultBuildMethodLines),
-      widgetCount: _readThreshold(section['widget_count'], defaultWidgetCount),
-      widgetNestingDepth: _readThreshold(
-          section['widget_nesting_depth'], defaultWidgetNestingDepth),
-    );
-  }
-
-  /// Reads a `{warning, error}` map, falling back to [fallback] for each missing
-  /// or non-integer bound (partial overrides are supported).
-  static Threshold _readThreshold(dynamic node, Threshold fallback) {
-    if (node is! YamlMap) return fallback;
-    return Threshold(
-      warning: _readInt(node['warning'], fallback.warning),
-      error: _readInt(node['error'], fallback.error),
+          _readInt(section['build_method_lines'], defaultBuildMethodLines),
+      methodLines: _readInt(section['method_lines'], defaultMethodLines),
+      widgetNestingDepth:
+          _readInt(section['widget_nesting_depth'], defaultWidgetNestingDepth),
+      maxPublicClasses:
+          _readInt(section['max_public_classes'], defaultMaxPublicClasses),
+      constructorParams:
+          _readInt(section['constructor_params'], defaultConstructorParams),
+      folderFiles: _readInt(section['folder_files'], defaultFolderFiles),
     );
   }
 
