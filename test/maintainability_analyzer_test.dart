@@ -325,6 +325,87 @@ class Shallow extends StatelessWidget {
 
       expect(findingsOf(await run(), 'nesting depth'), isEmpty);
     });
+
+    test('config objects (decorations, borders) do not inflate depth', () async {
+      writePubspec();
+      // 4 real widget levels: Expanded > TextField ... and Container > Text.
+      // The InputDecoration/OutlineInputBorder/BoxDecoration wrappers must not
+      // count, so this stays under the default warning threshold of 6.
+      writeDart('field.dart', '''
+import 'package:flutter/material.dart';
+
+class Field extends StatelessWidget {
+  const Field({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(
+        child: TextField(
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      ),
+      Container(
+        decoration: BoxDecoration(
+          border: Border.all(),
+          boxShadow: [BoxShadow(color: Colors.black)],
+        ),
+        child: Text('hi'),
+      ),
+    ]);
+  }
+}
+''');
+
+      expect(findingsOf(await run(), 'nesting depth'), isEmpty);
+    });
+
+    test('deep trees are still reported once config wrappers are excluded',
+        () async {
+      writePubspec();
+      // 8 real widget levels wrapping a decorated Container — the decoration
+      // and border must not push it to 9, but 8 still exceeds the default
+      // warning of 6.
+      writeDart('deep_field.dart', '''
+import 'package:flutter/material.dart';
+
+class DeepField extends StatelessWidget {
+  const DeepField({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Center(
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: Card(
+            child: Row(children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(),
+                  ),
+                  child: Text('hi'),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+''');
+
+      final findings = findingsOf(await run(), 'nesting depth').toList();
+      expect(findings, hasLength(1));
+      expect(
+          findings.single.message, contains('Maximum widget nesting depth is 8'));
+    });
   });
 
   // --- Generated-file exclusion ----------------------------------------------

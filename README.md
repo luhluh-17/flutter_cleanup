@@ -417,7 +417,7 @@ dart run flutter_cleanup maintainability --path ../my_app
 | Method length | Source lines of each function/method (getters, setters, constructors, and `build` excluded) | 50 / 100 |
 | `build()` length | Body length of a `Widget build(BuildContext)` method | 100 / 200 |
 | Widget count | Widget classes declared in one file (`StatelessWidget`, `StatefulWidget`, `ConsumerWidget`, `HookWidget`, `HookConsumerWidget`, `ConsumerStatefulWidget`) | 10 / 20 |
-| Widget nesting depth | Deepest widget-tree nesting inside a `build()` body | 6 / 10 |
+| Widget nesting depth | Deepest widget-tree nesting inside a `build()` body (structural widgets only — decoration/border/constraint config objects like `InputDecoration`, `BoxDecoration`, `OutlineInputBorder` are not counted) | 6 / 10 |
 
 A measured value at or above the **error** threshold is reported at `error`
 severity, at or above **warning** as `warning`, and below warning produces no

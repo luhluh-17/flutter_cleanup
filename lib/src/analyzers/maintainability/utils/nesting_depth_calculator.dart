@@ -22,20 +22,53 @@ class NestingDepthCalculator {
 
   /// PascalCase constructors that are *not* structural widgets — value/config
   /// types that appear inside `build()` and would otherwise inflate depth.
+  ///
+  /// This intentionally includes the *decoration, constraint and border*
+  /// wrappers (`InputDecoration`, `BoxDecoration`, `OutlineInputBorder`, …), not
+  /// just the leaf values they hold (`EdgeInsets`, `TextStyle`, `Border`). Those
+  /// wrappers are passed to named parameters like `decoration:`/`constraints:`;
+  /// counting them inflated the reported depth by one per config object (a
+  /// labeled `TextField` read as depth 6, a decorated `Container` as depth 7),
+  /// which pushed idiomatic leaf widgets over the threshold. A blocklist is
+  /// inherently incomplete — new config types (e.g. `WidgetStateProperty`) will
+  /// re-inflate depth until added here.
   static const Set<String> _nonWidgetBlocklist = {
+    // Leaf value types.
     'EdgeInsets',
+    'EdgeInsetsDirectional',
     'Duration',
     'Color',
     'Colors',
     'Offset',
     'Size',
     'TextStyle',
-    'Border',
-    'BorderRadius',
     'Radius',
     'Key',
     'ValueKey',
     'GlobalKey',
+    // Decorations & constraints (hold the leaf value types above).
+    'InputDecoration',
+    'BoxDecoration',
+    'ShapeDecoration',
+    'BoxConstraints',
+    'BoxShadow',
+    // Borders.
+    'Border',
+    'BorderSide',
+    'BorderRadius',
+    'InputBorder',
+    'OutlineInputBorder',
+    'UnderlineInputBorder',
+    // ShapeBorder subtypes (used in `shape:` on Card, Dialog, buttons, …).
+    'RoundedRectangleBorder',
+    'CircleBorder',
+    'StadiumBorder',
+    'BeveledRectangleBorder',
+    'ContinuousRectangleBorder',
+    // Gradients.
+    'LinearGradient',
+    'RadialGradient',
+    'SweepGradient',
   };
 
   /// `Type.method(...)` calls whose method is a known *lookup* (returns an

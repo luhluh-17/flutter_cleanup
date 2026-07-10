@@ -1,5 +1,14 @@
 ## Unreleased
 
+- `maintainability`: widget nesting depth no longer counts decoration, border,
+  constraint and gradient config objects as tree levels. `InputDecoration`,
+  `BoxDecoration`, `ShapeDecoration`, `BoxConstraints`, `BoxShadow`, the
+  `*InputBorder`/`ShapeBorder` types and `LinearGradient`/`RadialGradient`/
+  `SweepGradient` were treated as structural widgets, inflating reported depth
+  by one per config object — a labeled `TextField` read as depth 6 and a
+  decorated `Container` as depth 7. These now join the existing blocklist
+  (alongside `EdgeInsets`, `TextStyle`, `Border`, …), so the metric reflects
+  real widget nesting.
 - `architecture`: feature-completeness is no longer a full-vertical-slice check.
   Because every layer points inward at `domain`, a feature may legitimately be
   UI-only (domain/data shared in `core/`), logic-only, or a headless service —
