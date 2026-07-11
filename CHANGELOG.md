@@ -1,5 +1,19 @@
 ## Unreleased
 
+- `maintainability`: **`part of` files skip the public-class-count rule.**
+  A part file's classes belong to the parent library — splitting a large
+  library into parts is exactly the decomposition the rule encourages, and its
+  exemptions (sealed parent, cross-class references) may live in sibling files
+  a per-file parse cannot see. All other rules (file/method/`build()` length,
+  nesting, constructor params, folder count) still apply to part files.
+- `maintainability`: **constructor-parameter exemptions.** The
+  `constructor_params` rule no longer flags (1) private constructors
+  (`Foo._(...)`), (2) constructors of private classes, or (3) non-factory
+  `const` constructors of immutable non-widget data classes (all instance
+  fields `final`, no widget superclass, no `build(BuildContext)` method) —
+  a const data carrier's parameter count mirrors its field count, not
+  complexity, mirroring the `copyWith` method-length exemption. Wide *widget*
+  constructors are still flagged.
 - `maintainability`: **five false-positive fixes**, cross-checked against a
   large real-world Flutter workspace:
   - **Sealed unions pass the public-class-count rule.** A direct subtype

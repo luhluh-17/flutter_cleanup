@@ -32,8 +32,14 @@ import 'utils/nesting_depth_calculator.dart';
 /// 5. public top-level class count per file (a public class that a sibling
 ///    public class references, a subtype of a same-file `sealed` class, and a
 ///    static-only namespace class are supporting types and not counted;
-///    see [_FileVisitor.computePublicClassCount]),
-/// 6. constructor parameter count (excluding `super.key`), and
+///    `part of` files are skipped entirely — their classes belong to the
+///    parent library, and splitting into parts is exactly the decomposition
+///    this rule encourages; see [_FileVisitor.computePublicClassCount]),
+/// 6. constructor parameter count (excluding `super.key`; private
+///    constructors, constructors of private classes, and `const` constructors
+///    of immutable non-widget data classes are exempt — their parameter count
+///    mirrors their field count, not complexity; see
+///    [_FileVisitor._isExemptConstructor]), and
 /// 7. Dart files directly inside each folder under `lib/`.
 ///
 /// Method and `build()` lengths are measured like file length: distinct
@@ -187,13 +193,19 @@ class MaintainabilityAnalyzer implements Analyzer {
       line: visitor.maxNestingLine,
     );
 
-    // Rule 5: public top-level class count (file-level).
-    _addIfOverLimit(
-      issues,
-      kind: MaintainabilityIssueKind.publicClassCount,
-      value: visitor.computePublicClassCount(),
-      limit: config.maxPublicClasses,
-    );
+    // Rule 5: public top-level class count (file-level). Skipped for `part of`
+    // files: their classes belong to the parent library, and the rule's
+    // exemptions (sealed parent, cross-class references) live in sibling files
+    // this per-file parse cannot see. Every other rule still applies to parts.
+    final isPartFile = unit.directives.whereType<PartOfDirective>().isNotEmpty;
+    if (!isPartFile) {
+      _addIfOverLimit(
+        issues,
+        kind: MaintainabilityIssueKind.publicClassCount,
+        value: visitor.computePublicClassCount(),
+        limit: config.maxPublicClasses,
+      );
+    }
 
     return issues;
   }
@@ -417,6 +429,10 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
+    if (_isExemptConstructor(node)) {
+      super.visitConstructorDeclaration(node);
+      return;
+    }
     // Rule 6: constructor parameter count. `super.key` is mandatory Flutter
     // widget boilerplate, not real API surface, so it doesn't count.
     final count = node.parameters.parameters
@@ -491,6 +507,49 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
       );
     }
     super.visitFunctionDeclaration(node);
+  }
+
+  /// Whether Rule 6 skips [node]. Exempt are:
+  /// - private constructors (`Foo._(...)`) and constructors of private
+  ///   classes — not public API surface; call sites are library-local (e.g. a
+  ///   private FFI-binding holder taking one resolved symbol per parameter),
+  /// - non-factory `const` constructors of immutable non-widget data classes
+  ///   ([_isImmutableDataClass]) — like the `copyWith` method-length
+  ///   exemption, a const data carrier's parameter count mirrors its field
+  ///   count, not complexity.
+  /// Widgets stay flagged: a widget constructor with many parameters is a
+  /// composition smell the rule exists to catch.
+  bool _isExemptConstructor(ConstructorDeclaration node) {
+    if (node.name?.lexeme.startsWith('_') ?? false) return true;
+    final cls = node.thisOrAncestorOfType<ClassDeclaration>();
+    if (cls == null) return false;
+    if (cls.namePart.typeName.lexeme.startsWith('_')) return true;
+    return node.constKeyword != null &&
+        node.factoryKeyword == null &&
+        _isImmutableDataClass(cls);
+  }
+
+  /// An immutable data class for [_isExemptConstructor]: every instance field
+  /// `final`, not a subclass of a known widget base, and no
+  /// `build(BuildContext)` method (guards against widget bases the
+  /// [MaintainabilityAnalyzer._widgetSuperclasses] set doesn't know —
+  /// StatelessWidget subclasses are also const + all-final, so the widget
+  /// checks are load-bearing).
+  bool _isImmutableDataClass(ClassDeclaration cls) {
+    final superName = cls.extendsClause?.superclass.name.lexeme;
+    if (superName != null &&
+        MaintainabilityAnalyzer._widgetSuperclasses.contains(superName)) {
+      return false;
+    }
+    for (final member in cls.body.members) {
+      if (member is FieldDeclaration &&
+          !member.isStatic &&
+          !member.fields.isFinal) {
+        return false;
+      }
+      if (member is MethodDeclaration && _isBuildMethod(member)) return false;
+    }
+    return true;
   }
 
   /// A widget `build` method: named `build` with a first `BuildContext`

@@ -668,9 +668,11 @@ $fields
       // called `key` is real API surface.
       final ps = List.generate(8, (i) => 'required this.p$i').join(', ');
       final fields = List.generate(8, (i) => '  final int p$i;').join('\n');
+      // Non-const so the immutable-data-class exemption doesn't apply; the
+      // point here is that only `super.key` is special, not the name `key`.
       writeDart('entry.dart', '''
 class Entry {
-  const Entry({required this.key, $ps});
+  Entry({required this.key, $ps});
   final String key;
 $fields
 }
@@ -678,6 +680,140 @@ $fields
       final findings = findingsOf(await run(), 'parameters').toList();
       expect(findings, hasLength(1));
       expect(findings.single.message, contains('Constructor Entry has 9'));
+    });
+  });
+
+  // --- Constructor param exemptions ------------------------------------------
+
+  group('constructor param exemptions', () {
+    String params(int n, {bool named = false}) => List.generate(
+        n, (i) => named ? 'required this.p$i' : 'this.p$i').join(', ');
+    String fields(int n) =>
+        List.generate(n, (i) => '  final int p$i;').join('\n');
+
+    test('a private named constructor is exempt', () async {
+      writePubspec();
+      writeDart('bindings.dart', '''
+class Bindings {
+  Bindings._(${params(10)});
+${fields(10)}
+}
+''');
+      expect(findingsOf(await run(), 'parameters'), isEmpty);
+    });
+
+    test('a constructor of a private class is exempt', () async {
+      writePubspec();
+      writeDart('hidden.dart', '''
+class _Hidden {
+  _Hidden(${params(10)});
+${fields(10)}
+}
+''');
+      expect(findingsOf(await run(), 'parameters'), isEmpty);
+    });
+
+    test('a const constructor of an immutable non-widget data class is exempt',
+        () async {
+      writePubspec();
+      writeDart('anchor.dart', '''
+class WindowAnchor {
+  const WindowAnchor({${params(10, named: true)}});
+${fields(10)}
+}
+''');
+      expect(findingsOf(await run(), 'parameters'), isEmpty);
+    });
+
+    test('a wide const StatelessWidget constructor is still flagged',
+        () async {
+      writePubspec();
+      // Widgets are also const + all-final; the widget exclusion is
+      // load-bearing — a wide widget constructor is a composition smell.
+      writeDart('wide_widget.dart', '''
+import 'package:flutter/material.dart';
+
+class WideWidget extends StatelessWidget {
+  const WideWidget({super.key, ${params(10, named: true)}});
+${fields(10)}
+  @override
+  Widget build(BuildContext context) => const Placeholder();
+}
+''');
+      final findings = findingsOf(await run(), 'parameters').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.message, contains('Constructor WideWidget has 10'));
+    });
+
+    test('a const class declaring build(BuildContext) is still flagged',
+        () async {
+      writePubspec();
+      // Custom widget base the superclass set doesn't know.
+      writeDart('custom_base.dart', '''
+class Panel extends BasePanel {
+  const Panel({${params(10, named: true)}});
+${fields(10)}
+  @override
+  Widget build(BuildContext context) => const Placeholder();
+}
+''');
+      expect(findingsOf(await run(), 'parameters'), hasLength(1));
+    });
+
+    test('a const constructor with a non-final field is still flagged',
+        () async {
+      writePubspec();
+      // Invalid const (parse tolerates it) — mutable state means not a data
+      // carrier, so no exemption.
+      writeDart('mutable.dart', '''
+class Mutable {
+  const Mutable({${params(9, named: true)}, required this.count});
+${fields(9)}
+  int count = 0;
+}
+''');
+      expect(findingsOf(await run(), 'parameters'), hasLength(1));
+    });
+  });
+
+  // --- Part files --------------------------------------------------------------
+
+  group('part files', () {
+    test('public class count is not reported for part-of files', () async {
+      writePubspec();
+      writeDart('canvas.dart', '''
+part 'canvas.edges.dart';
+
+class Canvas {
+  const Canvas();
+}
+''');
+      writeDart('canvas.edges.dart', '''
+part of 'canvas.dart';
+
+class EdgeA {}
+
+class EdgeB {}
+
+class EdgeC {}
+''');
+      expect(findingsOf(await run(), 'public classes'), isEmpty);
+    });
+
+    test('method length is still reported inside part files', () async {
+      writePubspec();
+      writeDart('host.dart', "part 'host.impl.dart';\n");
+      writeDart(
+          'host.impl.dart', "part of 'host.dart';\n${functionWithLines('bigOne', 35)}");
+      expect(findingsOf(await run(), 'bigOne'), hasLength(1));
+    });
+
+    test('file length is still reported for part files', () async {
+      writePubspec();
+      writeDart('lib_main.dart', "part 'lib_main.body.dart';\n");
+      writeDart('lib_main.body.dart',
+          "part of 'lib_main.dart';\n${fileWithLines(310)}");
+      expect(findingsOf(await run(), 'File contains'), hasLength(1));
     });
   });
 

@@ -429,8 +429,8 @@ actionable recommendation. The rules and their default limits:
 | `build()` length | `build_method_length` | Code lines in the body of a widget `build` method — `build(BuildContext)` or Riverpod's `build(BuildContext, WidgetRef)` (blank and comment-only lines excluded) | ≤ 60 |
 | Method length | `method_length` | Code lines in the body of each function/method — blank/comment-only lines and the signature excluded; getters, setters, constructors, `build`, and the `exempt_methods` list (default `copyWith`) skipped | ≤ 30 |
 | Widget nesting depth | `widget_nesting_depth` | Deepest widget-tree nesting inside a `build()` body (structural widgets only — decoration/border/constraint config objects like `InputDecoration`, `BoxDecoration`, `OutlineInputBorder` are not counted) | ≤ 5 |
-| Public class count | `public_class_count` | Public (non-`_`) top-level classes in one file, **excluding supporting types** (see below) | ≤ 1 |
-| Constructor params | `constructor_params` | Parameters on any single constructor, excluding `super.key` (mandatory widget boilerplate) | ≤ 8 |
+| Public class count | `public_class_count` | Public (non-`_`) top-level classes in one file, **excluding supporting types** (see below); `part of` files are skipped — their classes belong to the parent library | ≤ 1 |
+| Constructor params | `constructor_params` | Parameters on any single constructor, excluding `super.key` (mandatory widget boilerplate); private constructors, constructors of private classes, and `const` constructors of immutable non-widget data classes are exempt (see below) | ≤ 8 |
 | Folder file count | `folder_file_count` | Dart files directly inside a folder under `lib/` (non-recursive; ignored/generated files excluded) | ≤ 15 |
 
 **File classification.** The file-length limit depends on what a file is, chosen
@@ -466,6 +466,26 @@ Two further kinds of class are supporting types by construction and never count:
   to instantiate the class (all declared constructors are private, or the class
   is abstract with none). A class with an *implicit* public constructor — no
   constructor declared and not abstract — still counts.
+
+`part of` files are skipped by this rule entirely: their classes belong to the
+parent library, splitting a large library into parts is exactly the
+decomposition the other rules encourage, and the exemptions above (sealed
+parent, cross-class references) may live in sibling files a per-file parse
+cannot see. Every other rule still applies inside part files.
+
+**Constructor params — data carriers and private constructors don't count.**
+The rule targets wide *public API* — above all widget constructors, where many
+parameters signal a composition smell. Three shapes are exempt:
+
+- **Private constructors** (`Foo._(...)`) and **constructors of private
+  classes** — library-local call sites, not API surface (e.g. an FFI bindings
+  holder taking one resolved symbol per parameter).
+- **Non-factory `const` constructors of immutable non-widget data classes** —
+  every instance field `final`, not a widget subclass, and no
+  `build(BuildContext)` method. Like `copyWith` under the method-length rule,
+  a const data carrier's parameter count mirrors its field count, not
+  complexity. Widgets are also const + all-final, so the widget checks are
+  load-bearing: a wide widget constructor is still flagged.
 
 Findings are **grouped by metric** in the text report, each under a sub-heading
 showing its limit. An **Accepted standards** legend of the active limits is
