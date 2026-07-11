@@ -82,6 +82,10 @@ class MaintainabilityConfig {
   final int widgetNestingDepth;
 
   /// Max number of public top-level classes declared in a single file.
+  ///
+  /// A public class that another public class in the same file references (by
+  /// inheritance or composition) is treated as a supporting type and does not
+  /// count toward this limit — see [MaintainabilityAnalyzer] Rule 5.
   final int maxPublicClasses;
 
   /// Max number of parameters on any single constructor.

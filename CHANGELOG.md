@@ -1,5 +1,15 @@
 ## Unreleased
 
+- `maintainability`: the **public-class-count** rule no longer counts a public
+  class that a sibling public class in the same file references — by inheritance
+  (`extends`/`implements`/`with`) or composition (a field/return/parameter type,
+  generic type argument, factory result, or a construction/`throw` in a body).
+  Cohesive pairs that belong together — a contract and its implementation, a
+  carrier and its element type, a widget and its own public `State` — no longer
+  trip the limit, while two genuinely unrelated public classes still do. Coupling
+  only through a shared top-level function, enum, or extension (or indirectly via
+  a `part` file or typedef alias) does not exempt a class, consistent with the
+  analyzer's `syntactic-ast` mode.
 - `maintainability`: **retuned to a single accepted-standard limit per metric**
   (was a `warning`/`error` pair). A value at or below the limit passes; above it
   is reported as a `warning`. New defaults: widget file ≤ 250 lines, controller

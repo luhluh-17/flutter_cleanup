@@ -357,6 +357,96 @@ class _FooState extends State<Foo> {
 ''');
       expect(findingsOf(await run(), 'public classes'), isEmpty);
     });
+
+    test('a contract plus its implementation passes (inheritance)', () async {
+      writePubspec();
+      writeDart('platform_info.dart', '''
+abstract class PlatformInfo {
+  bool get isWindows;
+}
+
+class DartPlatformInfo implements PlatformInfo {
+  @override
+  bool get isWindows => true;
+}
+''');
+      expect(findingsOf(await run(), 'public classes'), isEmpty);
+    });
+
+    test('a carrier plus its element type passes (composition)', () async {
+      writePubspec();
+      writeDart('inspection.dart', '''
+class ExpressionChild {
+  const ExpressionChild(this.name);
+  final String name;
+}
+
+class ExpressionInspection {
+  const ExpressionInspection(this.children);
+  final List<ExpressionChild> children;
+}
+''');
+      expect(findingsOf(await run(), 'public classes'), isEmpty);
+    });
+
+    test('two mutually-referencing classes pass (composition)', () async {
+      writePubspec();
+      writeDart('cancellation.dart', '''
+class CancellationToken {
+  CancellationToken(this.source);
+  final CancellationTokenSource source;
+}
+
+class CancellationTokenSource {
+  CancellationToken get token => CancellationToken(this);
+}
+''');
+      expect(findingsOf(await run(), 'public classes'), isEmpty);
+    });
+
+    test('a widget with a public State class passes', () async {
+      writePubspec();
+      writeDart('path_field.dart', '''
+import 'package:flutter/material.dart';
+
+class PathField extends StatefulWidget {
+  const PathField({super.key});
+  @override
+  State<PathField> createState() => PathFieldState();
+}
+
+class PathFieldState extends State<PathField> {
+  @override
+  Widget build(BuildContext context) => const Placeholder();
+}
+''');
+      expect(findingsOf(await run(), 'public classes'), isEmpty);
+    });
+
+    test('two unrelated public classes are still reported', () async {
+      writePubspec();
+      // A Set-wrapper and an independent DTO that never name each other: the
+      // rule must still fire (coupling via shared free functions does not
+      // exempt them under the strict class-to-class policy).
+      writeDart('naming.dart', '''
+class UsedNameIndex {
+  UsedNameIndex(this.names);
+  final Set<String> names;
+}
+
+class DeclaredOutputVariable {
+  const DeclaredOutputVariable(this.name);
+  final String name;
+}
+
+List<String> collect(UsedNameIndex index, DeclaredOutputVariable v) =>
+    [v.name];
+''');
+
+      final findings = findingsOf(await run(), 'public classes').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.message, contains('2 public classes'));
+    });
   });
 
   // --- Constructor params (limit 8) ------------------------------------------

@@ -28,7 +28,9 @@ import 'utils/nesting_depth_calculator.dart';
 ///    getters, setters, constructors and `build`),
 /// 3. `build()` method length,
 /// 4. maximum widget-tree nesting depth,
-/// 5. public top-level class count per file,
+/// 5. public top-level class count per file (a public class that a sibling
+///    public class references is treated as a supporting type and not counted;
+///    see [_FileVisitor.computePublicClassCount]),
 /// 6. constructor parameter count, and
 /// 7. Dart files directly inside each folder under `lib/`.
 ///
@@ -183,7 +185,7 @@ class MaintainabilityAnalyzer implements Analyzer {
     _addIfOverLimit(
       issues,
       kind: MaintainabilityIssueKind.publicClassCount,
-      value: visitor.publicClassCount,
+      value: visitor.computePublicClassCount(),
       limit: config.maxPublicClasses,
     );
 
@@ -270,7 +272,7 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
   static const NestingDepthCalculator _nesting = NestingDepthCalculator();
 
   final List<MaintainabilityIssue> issues = [];
-  int publicClassCount = 0;
+  final List<ClassDeclaration> _publicClasses = [];
   int maxNestingDepth = 0;
   int? maxNestingLine;
   bool _hasWidgetClass = false;
@@ -288,10 +290,42 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
     return _FileClass.other;
   }
 
+  /// Number of public top-level classes that are *not* a supporting type of
+  /// another public class in the same file (Rule 5).
+  ///
+  /// A public class is exempt from the count when another public class in the
+  /// same file references it — by inheritance (`extends`/`implements`/`with`)
+  /// or composition (a field/return/parameter type, generic type argument,
+  /// factory result, or a construction/throw in a body). This keeps cohesive
+  /// pairs together — a contract and its implementation, a carrier and its
+  /// element type, a widget and its own public `State` (mutually referenced via
+  /// `createState() => FooState()` and `class FooState extends State<Foo>`) —
+  /// while still flagging two genuinely unrelated public classes that never
+  /// name each other. The reference must come from another *class*: coupling
+  /// only through shared top-level functions, enums, or extensions does not
+  /// exempt a class. Purely syntactic, consistent with the rest of the walk.
+  int computePublicClassCount() {
+    final names = <String>{
+      for (final c in _publicClasses) c.namePart.typeName.lexeme,
+    };
+    if (names.length <= 1) return names.length;
+
+    final referencedByAnotherClass = <String>{};
+    for (final c in _publicClasses) {
+      final ownName = c.namePart.typeName.lexeme;
+      c.accept(_ClassReferenceCollector(
+        candidates: names,
+        ownName: ownName,
+        out: referencedByAnotherClass,
+      ));
+    }
+    return names.where((n) => !referencedByAnotherClass.contains(n)).length;
+  }
+
   @override
   void visitClassDeclaration(ClassDeclaration node) {
     final className = node.namePart.typeName.lexeme;
-    if (!className.startsWith('_')) publicClassCount++;
+    if (!className.startsWith('_')) _publicClasses.add(node);
 
     final superName = node.extendsClause?.superclass.name.lexeme;
     if (superName != null &&
@@ -393,4 +427,40 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
   int _lineSpan(AstNode node) => _lineOf(node.end) - _lineOf(node.offset) + 1;
 
   int _lineOf(int offset) => _lineInfo.getLocation(offset).lineNumber;
+}
+
+/// Records which of [candidates] a single class declaration references, so
+/// [_FileVisitor.computePublicClassCount] can tell whether one public class is
+/// a supporting type of another. Both type positions ([NamedType] — supertypes,
+/// field/return/parameter types, generic arguments) and identifier positions
+/// ([SimpleIdentifier] — unresolved constructions like `FooState()` or
+/// `throw SomeException(...)`, which parse as invocations without resolution)
+/// are collected. The class's own name is ignored so self-references don't
+/// exempt a class from the count.
+class _ClassReferenceCollector extends RecursiveAstVisitor<void> {
+  _ClassReferenceCollector({
+    required this.candidates,
+    required this.ownName,
+    required this.out,
+  });
+
+  final Set<String> candidates;
+  final String ownName;
+  final Set<String> out;
+
+  void _record(String name) {
+    if (name != ownName && candidates.contains(name)) out.add(name);
+  }
+
+  @override
+  void visitNamedType(NamedType node) {
+    _record(node.name.lexeme);
+    super.visitNamedType(node);
+  }
+
+  @override
+  void visitSimpleIdentifier(SimpleIdentifier node) {
+    _record(node.name);
+    super.visitSimpleIdentifier(node);
+  }
 }

@@ -427,7 +427,7 @@ actionable recommendation. The rules and their default limits:
 | `build()` length | `build_method_length` | Body length of a `Widget build(BuildContext)` method | ≤ 60 |
 | Method length | `method_length` | Source lines of each function/method (getters, setters, constructors, and `build` excluded) | ≤ 30 |
 | Widget nesting depth | `widget_nesting_depth` | Deepest widget-tree nesting inside a `build()` body (structural widgets only — decoration/border/constraint config objects like `InputDecoration`, `BoxDecoration`, `OutlineInputBorder` are not counted) | ≤ 5 |
-| Public class count | `public_class_count` | Public (non-`_`) top-level classes declared in one file | ≤ 1 |
+| Public class count | `public_class_count` | Public (non-`_`) top-level classes in one file, **excluding those a sibling public class references** (see below) | ≤ 1 |
 | Constructor params | `constructor_params` | Parameters on any single constructor | ≤ 8 |
 | Folder file count | `folder_file_count` | Dart files directly inside a folder under `lib/` (non-recursive; ignored/generated files excluded) | ≤ 15 |
 
@@ -440,6 +440,18 @@ when it is named `*_controller.dart`, declares a class whose name ends in
 file* when it declares a widget class (`StatelessWidget`, `StatefulWidget`,
 `ConsumerWidget`, `HookWidget`, `HookConsumerWidget`, `ConsumerStatefulWidget`).
 Otherwise the generic `file_lines` limit applies.
+
+**Public class count — supporting types don't count.** A public class is not
+counted when another public class in the *same file* references it — by
+inheritance (`extends`/`implements`/`with`) or composition (a field, return, or
+parameter type, a generic type argument, a factory result, or a construction in a
+body). This keeps cohesive pairs in one file (a contract and its implementation,
+a carrier and its element type, a widget and its own public `State`) while still
+flagging two genuinely unrelated public classes. The reference must come from
+another *class*: coupling only through a shared top-level function, enum, or
+extension — or indirectly through a `part` file or a typedef alias — does **not**
+exempt a class, consistent with the analyzer's `syntactic-ast` (no type
+resolution) mode.
 
 Findings are **grouped by metric** in the text report, each under a sub-heading
 showing its limit. An **Accepted standards** legend of the active limits is
