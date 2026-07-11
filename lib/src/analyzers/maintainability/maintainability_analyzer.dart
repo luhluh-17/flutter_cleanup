@@ -36,10 +36,10 @@ import 'utils/nesting_depth_calculator.dart';
 ///    parent library, and splitting into parts is exactly the decomposition
 ///    this rule encourages; see [_FileVisitor.computePublicClassCount]),
 /// 6. constructor parameter count (excluding `super.key`; private
-///    constructors, constructors of private classes, and `const` constructors
-///    of immutable non-widget data classes are exempt — their parameter count
-///    mirrors their field count, not complexity; see
-///    [_FileVisitor._isExemptConstructor]), and
+///    constructors, constructors of private classes, and constructors of
+///    immutable non-widget data classes — `const`, or all-final with
+///    `copyWith` — are exempt: their parameter count mirrors their field
+///    count, not complexity; see [_FileVisitor._isExemptConstructor]), and
 /// 7. Dart files directly inside each folder under `lib/`.
 ///
 /// Method and `build()` lengths are measured like file length: distinct
@@ -513,10 +513,12 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
   /// - private constructors (`Foo._(...)`) and constructors of private
   ///   classes — not public API surface; call sites are library-local (e.g. a
   ///   private FFI-binding holder taking one resolved symbol per parameter),
-  /// - non-factory `const` constructors of immutable non-widget data classes
-  ///   ([_isImmutableDataClass]) — like the `copyWith` method-length
-  ///   exemption, a const data carrier's parameter count mirrors its field
-  ///   count, not complexity.
+  /// - non-factory constructors of immutable non-widget data classes
+  ///   ([_isImmutableDataClass]) that are `const` or whose class declares
+  ///   `copyWith` (the canonical Dart data-class marker; a non-const ctor
+  ///   alone — e.g. a service taking many injected dependencies — is not
+  ///   enough) — like the `copyWith` method-length exemption, a data
+  ///   carrier's parameter count mirrors its field count, not complexity.
   /// Widgets stay flagged: a widget constructor with many parameters is a
   /// composition smell the rule exists to catch.
   bool _isExemptConstructor(ConstructorDeclaration node) {
@@ -524,10 +526,14 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
     final cls = node.thisOrAncestorOfType<ClassDeclaration>();
     if (cls == null) return false;
     if (cls.namePart.typeName.lexeme.startsWith('_')) return true;
-    return node.constKeyword != null &&
-        node.factoryKeyword == null &&
+    return node.factoryKeyword == null &&
+        (node.constKeyword != null || _declaresCopyWith(cls)) &&
         _isImmutableDataClass(cls);
   }
+
+  /// Whether [cls] declares a `copyWith` method.
+  bool _declaresCopyWith(ClassDeclaration cls) => cls.body.members.any(
+      (m) => m is MethodDeclaration && m.name.lexeme == 'copyWith');
 
   /// An immutable data class for [_isExemptConstructor]: every instance field
   /// `final`, not a subclass of a known widget base, and no

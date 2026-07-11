@@ -725,6 +725,32 @@ ${fields(10)}
       expect(findingsOf(await run(), 'parameters'), isEmpty);
     });
 
+    test('a non-const all-final class with copyWith is exempt', () async {
+      writePubspec();
+      // A state carrier whose initializer keeps the ctor non-const; copyWith
+      // is the data-class marker that stands in for `const`.
+      writeDart('state.dart', '''
+class BuilderState {
+  BuilderState({${params(10, named: true)}});
+${fields(10)}
+  BuilderState copyWith() => this;
+}
+''');
+      expect(findingsOf(await run(), 'parameters'), isEmpty);
+    });
+
+    test('a non-const class without copyWith is still flagged', () async {
+      writePubspec();
+      // e.g. a service with many injected dependencies.
+      writeDart('service.dart', '''
+class Service {
+  Service(${params(10)});
+${fields(10)}
+}
+''');
+      expect(findingsOf(await run(), 'parameters'), hasLength(1));
+    });
+
     test('a wide const StatelessWidget constructor is still flagged',
         () async {
       writePubspec();

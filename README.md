@@ -480,12 +480,16 @@ parameters signal a composition smell. Three shapes are exempt:
 - **Private constructors** (`Foo._(...)`) and **constructors of private
   classes** — library-local call sites, not API surface (e.g. an FFI bindings
   holder taking one resolved symbol per parameter).
-- **Non-factory `const` constructors of immutable non-widget data classes** —
-  every instance field `final`, not a widget subclass, and no
-  `build(BuildContext)` method. Like `copyWith` under the method-length rule,
-  a const data carrier's parameter count mirrors its field count, not
-  complexity. Widgets are also const + all-final, so the widget checks are
-  load-bearing: a wide widget constructor is still flagged.
+- **Non-factory constructors of immutable non-widget data classes** — every
+  instance field `final`, not a widget subclass, no `build(BuildContext)`
+  method, and the constructor is `const` *or* the class declares `copyWith`
+  (the canonical data-class marker; it covers state carriers whose
+  initializers keep the constructor non-const). Like `copyWith` under the
+  method-length rule, a data carrier's parameter count mirrors its field
+  count, not complexity. Widgets are also const + all-final, so the widget
+  checks are load-bearing: a wide widget constructor is still flagged, and a
+  non-const service class with many injected dependencies (no `copyWith`)
+  is too.
 
 Findings are **grouped by metric** in the text report, each under a sub-heading
 showing its limit. An **Accepted standards** legend of the active limits is

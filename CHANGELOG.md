@@ -9,11 +9,13 @@
 - `maintainability`: **constructor-parameter exemptions.** The
   `constructor_params` rule no longer flags (1) private constructors
   (`Foo._(...)`), (2) constructors of private classes, or (3) non-factory
-  `const` constructors of immutable non-widget data classes (all instance
-  fields `final`, no widget superclass, no `build(BuildContext)` method) —
-  a const data carrier's parameter count mirrors its field count, not
-  complexity, mirroring the `copyWith` method-length exemption. Wide *widget*
-  constructors are still flagged.
+  constructors of immutable non-widget data classes (all instance fields
+  `final`, no widget superclass, no `build(BuildContext)` method) when the
+  constructor is `const` or the class declares `copyWith` — a data carrier's
+  parameter count mirrors its field count, not complexity, mirroring the
+  `copyWith` method-length exemption. Wide *widget* constructors and
+  non-const service classes with many injected dependencies are still
+  flagged.
 - `maintainability`: **five false-positive fixes**, cross-checked against a
   large real-world Flutter workspace:
   - **Sealed unions pass the public-class-count rule.** A direct subtype
