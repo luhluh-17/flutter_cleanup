@@ -1,5 +1,31 @@
 ## Unreleased
 
+- `maintainability`: **five false-positive fixes**, cross-checked against a
+  large real-world Flutter workspace:
+  - **Sealed unions pass the public-class-count rule.** A direct subtype
+    (`extends`/`with`/`implements`) of a `sealed` class declared in the same
+    file is a supporting type: the language requires every subtype of a sealed
+    class to stay in its library, so "move each class into its own file" was
+    unactionable. Abstract (non-sealed) hierarchies still count.
+  - **Static-only namespace classes pass the public-class-count rule.** The
+    `class Tokens { Tokens._(); static const ... }` idiom (all members static,
+    no public way to instantiate) no longer counts; a class with an implicit
+    public constructor still does.
+  - **Method and `build()` lengths now count code lines of the body**, the same
+    rule file length already used: blank lines, comments, and the signature
+    (including `@override` and multi-line parameter lists) no longer count.
+  - **`build(BuildContext, WidgetRef)` is a build method.** Riverpod
+    `ConsumerWidget`/`HookConsumerWidget` builds were measured against the
+    30-line method limit instead of the 60-line build limit (and skipped
+    nesting-depth analysis) because detection required exactly one parameter.
+  - **`super.key` no longer counts toward the constructor-parameter limit** —
+    mandatory widget boilerplate, not API surface. A regular parameter that
+    happens to be named `key` still counts.
+- `maintainability`: new **`exempt_methods`** config key — method/function
+  names the method-length rule skips entirely, defaulting to `[copyWith]`
+  (mechanical data-class boilerplate whose length tracks the field count, not
+  complexity). Set `exempt_methods: []` to disable the exemption, or list your
+  own names (e.g. `toJson`, `props`).
 - `maintainability`: the **public-class-count** rule no longer counts a public
   class that a sibling public class in the same file references — by inheritance
   (`extends`/`implements`/`with`) or composition (a field/return/parameter type,

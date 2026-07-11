@@ -35,6 +35,7 @@ void main() {
     expect(config.maxPublicClasses, 1);
     expect(config.constructorParams, 8);
     expect(config.folderFiles, 15);
+    expect(config.exemptMethods, ['copyWith']);
   });
 
   test('absent maintainability section yields defaults', () {
@@ -89,5 +90,27 @@ maintainability:
   test('wrong-typed values fall back to defaults', () {
     writeConfig('maintainability:\n  method_lines: "lots"\n');
     expect(load().methodLines, 30);
+  });
+
+  group('exempt_methods', () {
+    test('a custom list replaces the default', () {
+      writeConfig('maintainability:\n  exempt_methods:\n    - toJson\n    - props\n');
+      expect(load().exemptMethods, ['toJson', 'props']);
+    });
+
+    test('an explicit empty list disables the exemption', () {
+      writeConfig('maintainability:\n  exempt_methods: []\n');
+      expect(load().exemptMethods, isEmpty);
+    });
+
+    test('a non-list value falls back to the default', () {
+      writeConfig('maintainability:\n  exempt_methods: copyWith\n');
+      expect(load().exemptMethods, ['copyWith']);
+    });
+
+    test('a list with non-string entries falls back to the default', () {
+      writeConfig('maintainability:\n  exempt_methods:\n    - toJson\n    - 3\n');
+      expect(load().exemptMethods, ['copyWith']);
+    });
   });
 }

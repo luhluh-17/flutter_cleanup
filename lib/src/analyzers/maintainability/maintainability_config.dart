@@ -22,6 +22,8 @@ import 'package:yaml/yaml.dart';
 ///   max_public_classes:     1
 ///   constructor_params:     8
 ///   folder_files:          15
+///   exempt_methods:             # method/function names the method-length
+///     - copyWith                # rule skips (data-class boilerplate)
 /// ```
 ///
 /// Parsing is tolerant (mirrors [ArchitectureConfig] / [IgnoreService]): a
@@ -40,6 +42,7 @@ class MaintainabilityConfig {
     this.maxPublicClasses = defaultMaxPublicClasses,
     this.constructorParams = defaultConstructorParams,
     this.folderFiles = defaultFolderFiles,
+    this.exemptMethods = defaultExemptMethods,
   });
 
   /// The all-defaults config used when no `maintainability:` section applies.
@@ -58,6 +61,7 @@ class MaintainabilityConfig {
   static const int defaultMaxPublicClasses = 1;
   static const int defaultConstructorParams = 8;
   static const int defaultFolderFiles = 15;
+  static const List<String> defaultExemptMethods = ['copyWith'];
 
   /// Whether the analyzer runs at all. When false the analyzer returns no
   /// findings.
@@ -93,6 +97,12 @@ class MaintainabilityConfig {
 
   /// Max number of Dart files directly inside a single folder under `lib/`.
   final int folderFiles;
+
+  /// Method/function names the method-length rule skips entirely — mechanical
+  /// data-class boilerplate (`copyWith` by default) whose length reflects the
+  /// field count, not complexity. Does not apply to `build()`, which has its
+  /// own rule.
+  final List<String> exemptMethods;
 
   /// Loads the `maintainability:` section from `<root>/.flutter_cleanup.yaml`.
   ///
@@ -130,11 +140,26 @@ class MaintainabilityConfig {
       constructorParams:
           _readInt(section['constructor_params'], defaultConstructorParams),
       folderFiles: _readInt(section['folder_files'], defaultFolderFiles),
+      exemptMethods:
+          _readStringList(section['exempt_methods'], defaultExemptMethods),
     );
   }
 
   static int _readInt(dynamic node, int defaultValue) =>
       node is int ? node : defaultValue;
+
+  /// Reads a YAML list of strings; anything else (missing, wrong type, or a
+  /// list with non-string entries) falls back to [defaultValue]. An explicit
+  /// empty list is honored — it disables the exemption.
+  static List<String> _readStringList(dynamic node, List<String> defaultValue) {
+    if (node is! YamlList) return defaultValue;
+    final result = <String>[];
+    for (final item in node) {
+      if (item is! String) return defaultValue;
+      result.add(item);
+    }
+    return List.unmodifiable(result);
+  }
 
   static bool _readBool(dynamic node, {required bool defaultValue}) =>
       node is bool ? node : defaultValue;

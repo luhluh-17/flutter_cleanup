@@ -206,6 +206,61 @@ void main() {
       expect(findings.single.message, contains('limit: 30'));
     });
 
+    test('blank lines, comments and the signature are not counted', () async {
+      writePubspec();
+      // 28 code lines in the body, padded with blanks, comments and a
+      // multi-line signature: raw span is way over 30, code lines are not.
+      final b = StringBuffer();
+      b.writeln('int spread(');
+      b.writeln('  int first,');
+      b.writeln('  int second,');
+      b.writeln(') {');
+      for (var i = 0; i < 27; i++) {
+        b.writeln('  var v$i = $i;');
+        b.writeln();
+        b.writeln('  // step $i');
+      }
+      b.writeln('  return 0;');
+      b.writeln('}');
+      writeDart('spread.dart', b.toString());
+      expect(findingsOf(await run(), 'Method spread()'), isEmpty);
+    });
+
+    test('copyWith is exempt by default', () async {
+      writePubspec();
+      final args =
+          List.generate(40, (i) => '        p$i: p$i ?? this.p$i,').join('\n');
+      writeDart('state.dart', '''
+class State {
+  const State();
+  State copyWith() {
+    return State(
+$args
+    );
+  }
+}
+''');
+      expect(findingsOf(await run(), 'Method copyWith()'), isEmpty);
+    });
+
+    test('an empty exempt_methods list re-enables copyWith', () async {
+      writePubspec();
+      writeConfig('maintainability:\n  exempt_methods: []\n');
+      final args =
+          List.generate(40, (i) => '        p$i: p$i ?? this.p$i,').join('\n');
+      writeDart('state.dart', '''
+class State {
+  const State();
+  State copyWith() {
+    return State(
+$args
+    );
+  }
+}
+''');
+      expect(findingsOf(await run(), 'Method copyWith()'), hasLength(1));
+    });
+
     test('getters, setters and constructors are ignored', () async {
       writePubspec();
       final body = List.generate(40, (i) => '    var v$i = $i;').join('\n');
@@ -256,6 +311,52 @@ $body
       expect(build.single.message, contains('limit: 60'));
       // Not also reported as a generic "Method build()".
       expect(findingsOf(result, 'Method build()'), isEmpty);
+    });
+
+    test('a ConsumerWidget build(context, ref) is a build method, not a plain '
+        'method', () async {
+      writePubspec();
+      // 40 code lines: over the 30-line method limit but under the 60-line
+      // build limit — it must not be flagged at all.
+      final body = List.generate(38, (i) => '    final w$i = $i;').join('\n');
+      writeDart('panel.dart', '''
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class Panel extends ConsumerWidget {
+  const Panel({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+$body
+    return const Placeholder();
+  }
+}
+''');
+      final result = await run();
+      expect(findingsOf(result, 'Method build()'), isEmpty);
+      expect(findingsOf(result, 'build() method'), isEmpty);
+    });
+
+    test('blank and comment lines inside build() are not counted', () async {
+      writePubspec();
+      // 55 statements + return: ≤ 60 code lines even though blanks/comments
+      // push the raw span far over the limit.
+      final body = List.generate(55, (i) => '    final w$i = $i;\n\n    // w$i')
+          .join('\n');
+      writeDart('page.dart', '''
+import 'package:flutter/material.dart';
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+$body
+    return const Placeholder();
+  }
+}
+''');
+      expect(findingsOf(await run(), 'build() method'), isEmpty);
     });
   });
 
@@ -423,6 +524,72 @@ class PathFieldState extends State<PathField> {
       expect(findingsOf(await run(), 'public classes'), isEmpty);
     });
 
+    test('a sealed hierarchy in one file passes', () async {
+      writePubspec();
+      // The language requires every subtype of a sealed class to stay in the
+      // same library, so none of these can move to its own file.
+      writeDart('event.dart', '''
+sealed class Event {}
+
+final class StartedEvent extends Event {}
+
+final class StoppedEvent extends Event {}
+
+class FailedEvent implements Event {}
+''');
+      expect(findingsOf(await run(), 'public classes'), isEmpty);
+    });
+
+    test('an abstract (non-sealed) hierarchy is still reported', () async {
+      writePubspec();
+      // Unlike sealed subtypes, these subclasses CAN move to their own files.
+      writeDart('failure.dart', '''
+abstract class Failure {}
+
+class DomainFailure extends Failure {}
+
+class InfrastructureFailure extends Failure {}
+''');
+      final findings = findingsOf(await run(), 'public classes').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.message, contains('2 public classes'));
+    });
+
+    test('a static-only namespace class does not count', () async {
+      writePubspec();
+      writeDart('theme.dart', '''
+class AppColors {
+  AppColors._();
+  static const int primary = 0xFF000000;
+}
+
+class AppSpacing {
+  AppSpacing._();
+  static const double small = 4;
+}
+''');
+      expect(findingsOf(await run(), 'public classes'), isEmpty);
+    });
+
+    test('static members with an implicit public constructor still count',
+        () async {
+      writePubspec();
+      // No declared constructor and not abstract → publicly instantiable, so
+      // the namespace exemption must not apply.
+      writeDart('pair.dart', '''
+class Config {
+  static const int retries = 3;
+}
+
+class Totals {
+  static int sum = 0;
+}
+''');
+      final findings = findingsOf(await run(), 'public classes').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.message, contains('2 public classes'));
+    });
+
     test('two unrelated public classes are still reported', () async {
       writePubspec();
       // A Set-wrapper and an independent DTO that never name each other: the
@@ -475,6 +642,42 @@ List<String> collect(UsedNameIndex index, DeclaredOutputVariable v) =>
       writePubspec();
       writeDart('ok.dart', classWithParams('Ok', 8));
       expect(findingsOf(await run(), 'parameters'), isEmpty);
+    });
+
+    test('super.key does not count toward the limit', () async {
+      writePubspec();
+      // 8 real params + super.key = 9 formals, but key is widget boilerplate.
+      final ps = List.generate(8, (i) => 'required this.p$i').join(', ');
+      final fields = List.generate(8, (i) => '  final int p$i;').join('\n');
+      writeDart('row.dart', '''
+import 'package:flutter/material.dart';
+
+class KeyValueRow extends StatelessWidget {
+  const KeyValueRow({super.key, $ps});
+$fields
+  @override
+  Widget build(BuildContext context) => const Placeholder();
+}
+''');
+      expect(findingsOf(await run(), 'parameters'), isEmpty);
+    });
+
+    test('a field formal named key still counts', () async {
+      writePubspec();
+      // Only `super.key` is exempt; a regular parameter that happens to be
+      // called `key` is real API surface.
+      final ps = List.generate(8, (i) => 'required this.p$i').join(', ');
+      final fields = List.generate(8, (i) => '  final int p$i;').join('\n');
+      writeDart('entry.dart', '''
+class Entry {
+  const Entry({required this.key, $ps});
+  final String key;
+$fields
+}
+''');
+      final findings = findingsOf(await run(), 'parameters').toList();
+      expect(findings, hasLength(1));
+      expect(findings.single.message, contains('Constructor Entry has 9'));
     });
   });
 

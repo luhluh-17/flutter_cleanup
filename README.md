@@ -386,6 +386,8 @@ maintainability:
   max_public_classes:   1
   constructor_params:   8
   folder_files:        15
+  exempt_methods:          # method/function names the method-length rule skips
+    - copyWith             # (default; set [] to disable the exemption)
 ```
 
 Parsing is tolerant (mirrors the rest of the config): a missing section,
@@ -424,11 +426,11 @@ actionable recommendation. The rules and their default limits:
 | Widget file length | `widget_file_length` | Lines of code in a file that declares a widget class | ≤ 250 |
 | Controller length | `controller_length` | Lines of code in a file classified as a controller | ≤ 300 |
 | File length | `file_length` | Lines of code in any other file (comment-only and blank lines excluded) | ≤ 300 |
-| `build()` length | `build_method_length` | Body length of a `Widget build(BuildContext)` method | ≤ 60 |
-| Method length | `method_length` | Source lines of each function/method (getters, setters, constructors, and `build` excluded) | ≤ 30 |
+| `build()` length | `build_method_length` | Code lines in the body of a widget `build` method — `build(BuildContext)` or Riverpod's `build(BuildContext, WidgetRef)` (blank and comment-only lines excluded) | ≤ 60 |
+| Method length | `method_length` | Code lines in the body of each function/method — blank/comment-only lines and the signature excluded; getters, setters, constructors, `build`, and the `exempt_methods` list (default `copyWith`) skipped | ≤ 30 |
 | Widget nesting depth | `widget_nesting_depth` | Deepest widget-tree nesting inside a `build()` body (structural widgets only — decoration/border/constraint config objects like `InputDecoration`, `BoxDecoration`, `OutlineInputBorder` are not counted) | ≤ 5 |
-| Public class count | `public_class_count` | Public (non-`_`) top-level classes in one file, **excluding those a sibling public class references** (see below) | ≤ 1 |
-| Constructor params | `constructor_params` | Parameters on any single constructor | ≤ 8 |
+| Public class count | `public_class_count` | Public (non-`_`) top-level classes in one file, **excluding supporting types** (see below) | ≤ 1 |
+| Constructor params | `constructor_params` | Parameters on any single constructor, excluding `super.key` (mandatory widget boilerplate) | ≤ 8 |
 | Folder file count | `folder_file_count` | Dart files directly inside a folder under `lib/` (non-recursive; ignored/generated files excluded) | ≤ 15 |
 
 **File classification.** The file-length limit depends on what a file is, chosen
@@ -452,6 +454,18 @@ another *class*: coupling only through a shared top-level function, enum, or
 extension — or indirectly through a `part` file or a typedef alias — does **not**
 exempt a class, consistent with the analyzer's `syntactic-ast` (no type
 resolution) mode.
+
+Two further kinds of class are supporting types by construction and never count:
+
+- **Subtypes of a same-file `sealed` class.** Dart requires every subtype of a
+  sealed class to live in the sealed class's library, so a sealed union
+  (`sealed class Event` + its `final class ...Event` cases) cannot be split into
+  one file per class — flagging it would be unactionable advice.
+- **Static-only namespace classes.** The `class Tokens { Tokens._(); static
+  const ... }` idiom: every field/method is `static` and there is no public way
+  to instantiate the class (all declared constructors are private, or the class
+  is abstract with none). A class with an *implicit* public constructor — no
+  constructor declared and not abstract — still counts.
 
 Findings are **grouped by metric** in the text report, each under a sub-heading
 showing its limit. An **Accepted standards** legend of the active limits is

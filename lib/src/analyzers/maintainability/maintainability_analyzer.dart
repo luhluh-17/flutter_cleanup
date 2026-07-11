@@ -25,14 +25,20 @@ import 'utils/nesting_depth_calculator.dart';
 /// 1. file length — lines of code, with the applicable limit chosen by
 ///    classifying the file as a controller, a widget file, or a generic file,
 /// 2. method length (any `FunctionDeclaration`/`MethodDeclaration` except
-///    getters, setters, constructors and `build`),
+///    getters, setters, constructors, `build`, and the config's
+///    `exempt_methods` boilerplate list, `copyWith` by default),
 /// 3. `build()` method length,
 /// 4. maximum widget-tree nesting depth,
 /// 5. public top-level class count per file (a public class that a sibling
-///    public class references is treated as a supporting type and not counted;
+///    public class references, a subtype of a same-file `sealed` class, and a
+///    static-only namespace class are supporting types and not counted;
 ///    see [_FileVisitor.computePublicClassCount]),
-/// 6. constructor parameter count, and
+/// 6. constructor parameter count (excluding `super.key`), and
 /// 7. Dart files directly inside each folder under `lib/`.
+///
+/// Method and `build()` lengths are measured like file length: distinct
+/// *code* lines of the body — blank lines, comments, and the signature don't
+/// count.
 ///
 /// Each file is parsed exactly once and all per-file rules run over that single
 /// [CompilationUnit], so the analyzer scales to large projects. Analysis is
@@ -273,6 +279,10 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
 
   final List<MaintainabilityIssue> issues = [];
   final List<ClassDeclaration> _publicClasses = [];
+
+  /// Names of `sealed` classes declared in this file (public or private), so
+  /// [computePublicClassCount] can exempt their same-file subtypes.
+  final Set<String> _sealedClassNames = {};
   int maxNestingDepth = 0;
   int? maxNestingLine;
   bool _hasWidgetClass = false;
@@ -304,28 +314,92 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
   /// name each other. The reference must come from another *class*: coupling
   /// only through shared top-level functions, enums, or extensions does not
   /// exempt a class. Purely syntactic, consistent with the rest of the walk.
+  ///
+  /// Two further kinds of class are supporting types by construction:
+  /// - a direct subtype of a `sealed` class declared in the same file
+  ///   ([_isSealedSubtype]) — the language requires it to stay in this library,
+  ///   so "move it to its own file" is not actionable, and
+  /// - a static-only namespace class ([_isNamespaceClass]) — a token/constant
+  ///   holder that exists to group values, not to model a second concept.
   int computePublicClassCount() {
     final names = <String>{
       for (final c in _publicClasses) c.namePart.typeName.lexeme,
     };
     if (names.length <= 1) return names.length;
 
-    final referencedByAnotherClass = <String>{};
+    final exempt = <String>{};
     for (final c in _publicClasses) {
       final ownName = c.namePart.typeName.lexeme;
+      if (_isSealedSubtype(c) || _isNamespaceClass(c)) exempt.add(ownName);
       c.accept(_ClassReferenceCollector(
         candidates: names,
         ownName: ownName,
-        out: referencedByAnotherClass,
+        out: exempt,
       ));
     }
-    return names.where((n) => !referencedByAnotherClass.contains(n)).length;
+    return names.where((n) => !exempt.contains(n)).length;
+  }
+
+  /// Whether [node] is a direct subtype (`extends`/`with`/`implements`) of a
+  /// `sealed` class declared in this file. Dart requires every subtype of a
+  /// sealed class to live in the sealed class's library, so the members of a
+  /// sealed union cannot each move to their own file.
+  bool _isSealedSubtype(ClassDeclaration node) {
+    final superclass = node.extendsClause?.superclass;
+    if (superclass != null && _sealedClassNames.contains(superclass.name.lexeme)) {
+      return true;
+    }
+    final interfaces = node.implementsClause?.interfaces;
+    if (interfaces != null &&
+        interfaces.any((t) => _sealedClassNames.contains(t.name.lexeme))) {
+      return true;
+    }
+    final mixins = node.withClause?.mixinTypes;
+    return mixins != null &&
+        mixins.any((t) => _sealedClassNames.contains(t.name.lexeme));
+  }
+
+  /// Whether [node] is a static-only "namespace" class — the
+  /// `class Tokens { Tokens._(); static const ... }` idiom: at least one
+  /// member, every field/method `static`, and no public way to instantiate it
+  /// (every declared constructor is private, or the class is abstract with no
+  /// constructor at all). A class with no declared constructor and no
+  /// `abstract` modifier has an implicit public constructor and does NOT
+  /// qualify.
+  bool _isNamespaceClass(ClassDeclaration node) {
+    // A public primary constructor (Dart 3.10+) makes the class instantiable.
+    final namePart = node.namePart;
+    var hasPrivateConstructor = false;
+    if (namePart is PrimaryConstructorDeclaration) {
+      final ctorName = namePart.constructorName?.name.lexeme;
+      if (ctorName == null || !ctorName.startsWith('_')) return false;
+      hasPrivateConstructor = true;
+    }
+
+    final members = node.body.members;
+    if (members.isEmpty && !hasPrivateConstructor) return false;
+    for (final member in members) {
+      switch (member) {
+        case ConstructorDeclaration():
+          final name = member.name?.lexeme;
+          if (name == null || !name.startsWith('_')) return false;
+          hasPrivateConstructor = true;
+        case FieldDeclaration():
+          if (!member.isStatic) return false;
+        case MethodDeclaration():
+          if (!member.isStatic) return false;
+        default:
+          return false; // Unknown member kind — don't exempt.
+      }
+    }
+    return hasPrivateConstructor || node.abstractKeyword != null;
   }
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
     final className = node.namePart.typeName.lexeme;
     if (!className.startsWith('_')) _publicClasses.add(node);
+    if (node.sealedKeyword != null) _sealedClassNames.add(className);
 
     final superName = node.extendsClause?.superclass.name.lexeme;
     if (superName != null &&
@@ -343,8 +417,12 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
-    // Rule 6: constructor parameter count.
-    final count = node.parameters.parameters.length;
+    // Rule 6: constructor parameter count. `super.key` is mandatory Flutter
+    // widget boilerplate, not real API surface, so it doesn't count.
+    final count = node.parameters.parameters
+        .where((param) =>
+            !(param is SuperFormalParameter && param.name.lexeme == 'key'))
+        .length;
     final owner =
         node.thisOrAncestorOfType<ClassDeclaration>()?.namePart.typeName.lexeme ??
             node.typeName?.name ??
@@ -373,7 +451,7 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
       MaintainabilityAnalyzer._addIfOverLimit(
         issues,
         kind: MaintainabilityIssueKind.buildMethodLength,
-        value: _lineSpan(node.body),
+        value: _codeLineSpan(node.body),
         limit: _config.buildMethodLines,
         line: _lineOf(node.offset),
       );
@@ -383,12 +461,12 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
         maxNestingDepth = depth;
         maxNestingLine = _lineOf(node.offset);
       }
-    } else {
+    } else if (!_config.exemptMethods.contains(node.name.lexeme)) {
       // Rule 2: method length.
       MaintainabilityAnalyzer._addIfOverLimit(
         issues,
         kind: MaintainabilityIssueKind.methodLength,
-        value: _lineSpan(node),
+        value: _codeLineSpan(node.body),
         limit: _config.methodLines,
         subject: node.name.lexeme,
         line: _lineOf(node.offset),
@@ -399,12 +477,14 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitFunctionDeclaration(FunctionDeclaration node) {
-    if (!node.isGetter && !node.isSetter) {
+    if (!node.isGetter &&
+        !node.isSetter &&
+        !_config.exemptMethods.contains(node.name.lexeme)) {
       // Rule 2: top-level / local function length.
       MaintainabilityAnalyzer._addIfOverLimit(
         issues,
         kind: MaintainabilityIssueKind.methodLength,
-        value: _lineSpan(node),
+        value: _codeLineSpan(node.functionExpression.body),
         limit: _config.methodLines,
         subject: node.name.lexeme,
         line: _lineOf(node.offset),
@@ -413,18 +493,40 @@ class _FileVisitor extends RecursiveAstVisitor<void> {
     super.visitFunctionDeclaration(node);
   }
 
-  /// A `Widget build(BuildContext context)` method: named `build` with a single
-  /// `BuildContext` parameter. The parameter type is checked via source text to
-  /// stay independent of analyzer AST class churn (no element resolution).
+  /// A widget `build` method: named `build` with a first `BuildContext`
+  /// parameter and at most one more (Riverpod's
+  /// `build(BuildContext context, WidgetRef ref)`). The parameter type is
+  /// checked via source text to stay independent of analyzer AST class churn
+  /// (no element resolution).
   bool _isBuildMethod(MethodDeclaration node) {
     if (node.name.lexeme != 'build') return false;
     final params = node.parameters?.parameters;
-    if (params == null || params.length != 1) return false;
-    return params.single.toSource().contains('BuildContext');
+    if (params == null || params.isEmpty || params.length > 2) return false;
+    return params.first.toSource().contains('BuildContext');
   }
 
-  /// Inclusive source-line span of [node].
-  int _lineSpan(AstNode node) => _lineOf(node.end) - _lineOf(node.offset) + 1;
+  /// Distinct code lines within [node]'s token range — the same counting rule
+  /// as [MaintainabilityAnalyzer._codeLineCount], bounded to one node: blank
+  /// lines carry no token and comments hang off tokens as `precedingComments`,
+  /// so neither is counted, and the signature outside a body contributes
+  /// nothing when [node] is a [FunctionBody].
+  int _codeLineSpan(AstNode node) {
+    final lines = <int>{};
+    final last = node.endToken;
+    Token? token = node.beginToken;
+    while (token != null) {
+      final start = _lineOf(token.offset);
+      final end = _lineOf(token.end);
+      for (var l = start; l <= end; l++) {
+        lines.add(l);
+      }
+      if (token == last) break;
+      final next = token.next;
+      if (next == null || next == token) break;
+      token = next;
+    }
+    return lines.length;
+  }
 
   int _lineOf(int offset) => _lineInfo.getLocation(offset).lineNumber;
 }
